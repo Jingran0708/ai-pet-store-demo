@@ -1,0 +1,72 @@
+{
+  "Golden Retriever": {
+    "price_min": 1200,
+    "price_max": 1800,
+    "beginner_friendly": true,
+    "energy": "high",
+    "family_friendly": true,
+    "description": "Friendly, reliable, and trustworthy. One of the most popular family dogs.",
+    "grooming": "Weekly brushing, sheds seasonally",
+    "good_for": ["families with kids", "active owners", "first-time owners"]
+  },
+  "Labrador": {
+    "price_min": 1000,
+    "price_max": 1500,
+    "beginner_friendly": true,
+    "energy": "high",
+    "family_friendly": true,
+    "description": "Outgoing, even-tempered, and gentle. Excellent with children and other pets.",
+    "grooming": "Weekly brushing",
+    "good_for": ["families with kids", "active owners", "first-time owners"]
+  },
+  "Cavalier King Charles": {
+    "price_min": 1500,
+    "price_max": 2000,
+    "beginner_friendly": true,
+    "energy": "low",
+    "family_friendly": true,
+    "description": "Affectionate, graceful, and gentle. Loves cuddles and adapts to apartment life.",
+    "grooming": "Twice-weekly brushing",
+    "good_for": ["apartments", "first-time owners", "families"]
+  },
+  "Beagle": {
+    "price_min": 800,
+    "price_max": 1200,
+    "beginner_friendly": true,
+    "energy": "medium",
+    "family_friendly": true,
+    "description": "Merry, curious, and friendly. Great with kids and loves to explore.",
+    "grooming": "Weekly brushing",
+    "good_for": ["families with kids", "active owners", "first-time owners"]
+  },
+  "Border Collie": {
+    "price_min": 1000,
+    "price_max": 1500,
+    "beginner_friendly": false,
+    "energy": "high",
+    "family_friendly": false,
+    "description": "Highly intelligent and intensely energetic. Needs a job to do and lots of exercise.",
+    "grooming": "Twice-weekly brushing",
+    "good_for": ["experienced owners", "active lifestyle", "large spaces"]
+  },
+  "Husky": {
+    "price_min": 1000,
+    "price_max": 1600,
+    "beginner_friendly": false,
+    "energy": "high",
+    "family_friendly": false,
+    "description": "Striking looks and a free-spirited personality. Needs heavy exercise and space.",
+    "grooming": "Daily brushing during shedding season",
+    "good_for": ["experienced owners", "active lifestyle", "cold climates"]
+  },
+  "Shih Tzu": {
+    "price_min": 800,
+    "price_max": 1200,
+    "beginner_friendly": true,
+    "energy": "low",
+    "family_friendly": true,
+    "description": "Outgoing and happy. Thrives in apartments and loves to be pampered.",
+    "grooming": "Daily brushing or regular grooming appointments",
+    "good_for": ["apartments", "first-time owners", "families"]
+  }
+}

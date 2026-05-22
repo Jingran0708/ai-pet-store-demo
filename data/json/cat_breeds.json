@@ -1,0 +1,82 @@
+{
+  "British Shorthair": {
+    "price_min": 800,
+    "price_max": 1200,
+    "beginner_friendly": true,
+    "energy": "low",
+    "family_friendly": true,
+    "description": "Calm, round-faced, and incredibly affectionate. Adapts well to apartment life.",
+    "grooming": "Weekly brushing",
+    "good_for": ["first-time owners", "apartments", "families with kids"]
+  },
+  "Ragdoll": {
+    "price_min": 1000,
+    "price_max": 1500,
+    "beginner_friendly": true,
+    "energy": "low",
+    "family_friendly": true,
+    "description": "Gentle giants known for going limp when held. Very docile and affectionate.",
+    "grooming": "Twice-weekly brushing",
+    "good_for": ["first-time owners", "families with kids", "quiet homes"]
+  },
+  "Persian": {
+    "price_min": 900,
+    "price_max": 1300,
+    "beginner_friendly": true,
+    "energy": "low",
+    "family_friendly": false,
+    "description": "Quiet and sweet-natured. Loves calm environments and gentle handling.",
+    "grooming": "Daily brushing required",
+    "good_for": ["apartments", "quiet homes"]
+  },
+  "Scottish Fold": {
+    "price_min": 1000,
+    "price_max": 1400,
+    "beginner_friendly": true,
+    "energy": "medium",
+    "family_friendly": true,
+    "description": "Distinctive folded ears and an owl-like face. Playful but not demanding.",
+    "grooming": "Weekly brushing",
+    "good_for": ["first-time owners", "families", "apartments"]
+  },
+  "Bengal": {
+    "price_min": 1200,
+    "price_max": 1800,
+    "beginner_friendly": false,
+    "energy": "high",
+    "family_friendly": false,
+    "description": "Wild-looking with a leopard coat. Highly active, intelligent, and curious.",
+    "grooming": "Minimal — short coat",
+    "good_for": ["active owners", "large spaces", "experienced owners"]
+  },
+  "Russian Blue": {
+    "price_min": 700,
+    "price_max": 1000,
+    "beginner_friendly": true,
+    "energy": "medium",
+    "family_friendly": true,
+    "description": "Elegant silver-blue coat and bright green eyes. Loyal but slightly shy with strangers.",
+    "grooming": "Occasional brushing",
+    "good_for": ["first-time owners", "apartments", "families"]
+  },
+  "Maine Coon": {
+    "price_min": 1000,
+    "price_max": 1500,
+    "beginner_friendly": false,
+    "energy": "high",
+    "family_friendly": true,
+    "description": "The gentle giant of cats. Dog-like personality, loves to follow owners around.",
+    "grooming": "Twice-weekly brushing",
+    "good_for": ["families with kids", "active owners", "large spaces"]
+  },
+  "Siamese": {
+    "price_min": 600,
+    "price_max": 1000,
+    "beginner_friendly": false,
+    "energy": "high",
+    "family_friendly": true,
+    "description": "Very vocal and social. Forms strong bonds and hates being left alone for long.",
+    "grooming": "Minimal — short coat",
+    "good_for": ["families", "active owners", "people home often"]
+  }
+}

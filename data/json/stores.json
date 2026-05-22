@@ -1,0 +1,17 @@
+[
+  {
+    "name": "Happy Paws Downtown",
+    "address": "123 King Street West, Toronto",
+    "phone": "416-555-0101"
+  },
+  {
+    "name": "Happy Paws Midtown",
+    "address": "456 Yonge Street, Toronto",
+    "phone": "416-555-0202"
+  },
+  {
+    "name": "Happy Paws East End",
+    "address": "789 Danforth Avenue, Toronto",
+    "phone": "416-555-0303"
+  }
+]

@@ -1,0 +1,75 @@
+{
+  "CAT001": {
+    "name": "Royal Canin Adult Cat Dry Food 2kg",
+    "price": 28.99,
+    "stock": "in_stock",
+    "category": "cat_food"
+  },
+  "CAT002": {
+    "name": "Whiskas Wet Food Variety Pack 12 cans",
+    "price": 18.99,
+    "stock": "in_stock",
+    "category": "cat_food"
+  },
+  "CAT003": {
+    "name": "Hills Science Diet Kitten Food 1.6kg",
+    "price": 32.99,
+    "stock": "low_stock",
+    "stock_qty": 3,
+    "category": "cat_food"
+  },
+  "CAT004": {
+    "name": "Fancy Feast Classic Pate 24 pack",
+    "price": 22.99,
+    "stock": "in_stock",
+    "category": "cat_food"
+  },
+  "CAT005": {
+    "name": "Royal Canin Kitten Dry Food 2kg",
+    "price": 32.99,
+    "stock": "in_stock",
+    "category": "cat_food"
+  },
+  "DOG001": {
+    "name": "Royal Canin Adult Dog Dry Food 4kg",
+    "price": 45.99,
+    "stock": "in_stock",
+    "category": "dog_food"
+  },
+  "DOG002": {
+    "name": "Pedigree Wet Food 12 pack",
+    "price": 16.99,
+    "stock": "in_stock",
+    "category": "dog_food"
+  },
+  "DOG003": {
+    "name": "Hills Science Diet Puppy Food 3kg",
+    "price": 38.99,
+    "stock": "out_of_stock",
+    "category": "dog_food"
+  },
+  "DOG004": {
+    "name": "Orijen Original Dry Dog Food 2kg",
+    "price": 42.99,
+    "stock": "in_stock",
+    "category": "dog_food"
+  },
+  "ACC001": {
+    "name": "Cat Feather Wand Toy",
+    "price": 12.99,
+    "stock": "in_stock",
+    "category": "accessory"
+  },
+  "ACC002": {
+    "name": "Slicker Brush (cats/dogs)",
+    "price": 16.99,
+    "stock": "in_stock",
+    "category": "accessory"
+  },
+  "ACC003": {
+    "name": "Stainless Steel Water Fountain",
+    "price": 39.99,
+    "stock": "in_stock",
+    "category": "accessory"
+  }
+}

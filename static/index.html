@@ -1,0 +1,934 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Happy Paws Pet Store</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css"/>
+<style>
+:root{--purple:#534AB7;--purple-dark:#3C3489;--purple-light:#EEEDFE;--bg:#f7f6f2;--card:#fff;--border:rgba(0,0,0,0.1);--text:#1a1a1a;--muted:#6b6b6b;--success:#1D9E75;--warning:#BA7517;--radius:14px;}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;}
+#landing{max-width:680px;margin:0 auto;padding:3rem 1.5rem;}
+.hero{text-align:center;margin-bottom:2.5rem;}
+.hero .paw{font-size:48px;color:var(--purple);margin-bottom:1rem;}
+.hero h1{font-size:28px;font-weight:700;margin-bottom:8px;}
+.hero p{color:var(--muted);font-size:15px;}
+.choice-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;}
+.choice-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:1.5rem 1.25rem;cursor:pointer;transition:all 0.15s;display:flex;align-items:flex-start;gap:14px;}
+.choice-card:hover{border-color:var(--purple);box-shadow:0 4px 20px rgba(83,74,183,0.12);transform:translateY(-2px);}
+.choice-card .icon{font-size:28px;color:var(--purple);flex-shrink:0;margin-top:2px;}
+.choice-card .label{font-size:15px;font-weight:600;margin-bottom:4px;}
+.choice-card .sub{font-size:12px;color:var(--muted);line-height:1.5;}
+#agent-view{display:none;max-width:640px;margin:0 auto;padding:1rem 1.5rem 2rem;}
+.top-bar{display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;}
+.back-btn{background:none;border:none;font-size:14px;color:var(--muted);cursor:pointer;display:flex;align-items:center;gap:5px;}
+.back-btn:hover{color:var(--text);}
+.status{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted);}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--success);}
+.chat-area{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:1.25rem;min-height:320px;max-height:420px;overflow-y:auto;display:flex;flex-direction:column;gap:12px;margin-bottom:12px;}
+.msg{display:flex;gap:9px;align-items:flex-start;}
+.msg.user{flex-direction:row-reverse;}
+.bubble{max-width:78%;padding:11px 15px;font-size:14px;line-height:1.65;}
+.msg.ai .bubble{background:#f3f2fb;color:var(--text);border-radius:4px 16px 16px 16px;}
+.msg.user .bubble{background:var(--purple);color:white;border-radius:16px 4px 16px 16px;}
+.avatar{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;flex-shrink:0;margin-top:2px;}
+.ai-av{background:var(--purple-light);color:var(--purple);}
+.u-av{background:#eee;color:var(--muted);}
+.pet-img-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;max-width:78%;margin-top:4px;}
+.pet-img-card img{width:100%;max-height:200px;object-fit:cover;display:block;}
+.pet-img-label{padding:8px 12px;font-size:13px;color:var(--muted);display:flex;align-items:center;gap:5px;}
+.quick-btns{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:10px;}
+.qbtn{background:white;border:1px solid var(--border);border-radius:20px;padding:7px 15px;font-size:13px;cursor:pointer;color:var(--text);transition:all 0.1s;}
+.qbtn:hover{border-color:var(--purple);color:var(--purple);}
+.input-row{display:flex;gap:9px;align-items:center;}
+.input-row input{flex:1;border:1px solid var(--border);border-radius:10px;padding:10px 14px;font-size:14px;outline:none;}
+.input-row input:focus{border-color:var(--purple);}
+.input-row input.listening{border-color:#e53e3e;background:#fff5f5;}
+.send-btn{background:var(--purple);color:white;border:none;border-radius:10px;padding:10px 16px;font-size:14px;cursor:pointer;}
+.send-btn:hover{background:var(--purple-dark);}
+.send-btn:disabled{background:#ccc;cursor:not-allowed;}
+.mic-btn{background:white;border:1px solid var(--border);border-radius:10px;padding:8px 12px;font-size:13px;cursor:pointer;color:var(--muted);display:flex;align-items:center;gap:4px;}
+.mic-btn:hover{border-color:var(--purple);color:var(--purple);}
+.mic-btn.active{background:#fff5f5;border-color:#e53e3e;color:#e53e3e;animation:pulse 1s infinite;}
+@keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.08)}}
+.voice-status{text-align:center;font-size:12px;color:#e53e3e;margin-bottom:6px;min-height:18px;}
+.typing span{width:7px;height:7px;border-radius:50%;background:var(--muted);display:inline-block;animation:bounce 1s infinite;margin:0 2px;}
+.typing span:nth-child(2){animation-delay:.15s}.typing span:nth-child(3){animation-delay:.3s}
+@keyframes bounce{0%,80%,100%{transform:translateY(0)}40%{transform:translateY(-7px)}}
+.action-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:1.25rem;margin-bottom:12px;}
+.action-card h3{font-size:15px;font-weight:600;margin-bottom:14px;display:flex;align-items:center;gap:6px;}
+.field-row{display:flex;gap:8px;margin-bottom:10px;}
+.field-row input,.field-row select,.field-row textarea{flex:1;border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;outline:none;background:white;font-family:inherit;}
+.field-row input:focus,.field-row select:focus,.field-row textarea:focus{border-color:var(--purple);}
+.field-full{width:100%;border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;margin-bottom:10px;outline:none;background:white;font-family:inherit;}
+.field-full:focus{border-color:var(--purple);}
+.section-label{font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin:14px 0 8px;}
+.order-summary-box{background:var(--purple-light);border-radius:10px;padding:14px 16px;margin-bottom:14px;}
+.order-summary-box .item-name{font-weight:700;font-size:15px;color:var(--purple);margin-bottom:10px;}
+.order-summary-box table{width:100%;font-size:13px;}
+.order-summary-box td{padding:3px 0;color:var(--muted);}
+.order-summary-box td:last-child{text-align:right;color:var(--text);}
+.order-summary-box .total-row td{font-weight:700;font-size:15px;color:var(--purple);border-top:1px solid rgba(83,74,183,0.2);padding-top:8px;}
+.submit-btn{width:100%;background:var(--purple);color:white;border:none;border-radius:10px;padding:13px;font-size:15px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;}
+.submit-btn:hover{background:var(--purple-dark);}
+.submit-btn:disabled{background:#ccc;cursor:not-allowed;}
+.escalate-btn{display:inline-flex;align-items:center;gap:7px;background:#fff8ec;color:var(--warning);border:1px solid #f0d08a;border-radius:10px;padding:9px 16px;font-size:14px;cursor:pointer;margin-bottom:12px;}
+.mock-badge{background:#fff3cd;color:#856404;border:1px solid #ffc107;border-radius:6px;padding:6px 10px;font-size:12px;margin-bottom:12px;display:flex;align-items:center;gap:6px;}
+.info-badge{background:#e8f4fd;color:#1a6fa8;border:1px solid #b3d9f5;border-radius:6px;padding:8px 12px;font-size:13px;margin-bottom:10px;display:flex;align-items:flex-start;gap:6px;}
+.error-badge{background:#fff5f5;color:#c53030;border:1px solid #feb2b2;border-radius:6px;padding:8px 12px;font-size:13px;margin-bottom:10px;display:flex;align-items:flex-start;gap:6px;}.safety-banner{border-radius:10px;padding:12px 14px;font-size:13px;margin-bottom:12px;line-height:1.6;border:1.5px solid;}.safety-emergency{background:#fff0f0;color:#7f1d1d;border-color:#fca5a5;}.safety-urgent{background:#fff7ed;color:#7c2d12;border-color:#fdba74;}.safety-monitor{background:#fefce8;color:#713f12;border-color:#fde047;}
+.card-row{display:flex;gap:8px;margin-bottom:10px;}
+.card-row input{flex:1;border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;outline:none;}
+/* Modal */
+.modal-overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;}
+.modal-overlay.open{display:flex;}
+.modal{background:var(--card);border-radius:var(--radius);padding:1.75rem;max-width:480px;width:90%;max-height:90vh;overflow-y:auto;}
+.modal h3{font-size:17px;font-weight:600;margin-bottom:4px;}
+.modal p{font-size:13px;color:var(--muted);margin-bottom:16px;}
+.modal-close{float:right;background:none;border:none;font-size:20px;cursor:pointer;color:var(--muted);margin-top:-4px;}
+/* Success */
+#success-view{display:none;max-width:520px;margin:4rem auto;padding:1.5rem;text-align:center;}
+.success-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:2rem;}
+.success-icon{font-size:56px;color:var(--success);margin-bottom:1rem;}
+.success-card h2{font-size:22px;font-weight:700;margin-bottom:8px;}
+.success-card p{color:var(--muted);font-size:14px;line-height:1.7;margin-bottom:6px;}
+.ref-id{font-family:monospace;background:var(--purple-light);color:var(--purple);padding:6px 14px;border-radius:6px;font-size:15px;font-weight:700;display:inline-block;margin:10px 0;}
+.home-btn{margin-top:1rem;background:var(--purple);color:white;border:none;border-radius:10px;padding:11px 24px;font-size:14px;cursor:pointer;}
+.home-btn:hover{background:var(--purple-dark);}
+.continue-btn{margin-top:10px;background:none;border:1px solid var(--purple);color:var(--purple);border-radius:10px;padding:9px 20px;font-size:14px;cursor:pointer;display:block;width:100%;}
+.continue-btn:hover{background:var(--purple-light);}
+.cookie-banner{position:fixed;bottom:0;left:0;right:0;background:#1a1a1a;color:#f0f0f0;padding:14px 24px;display:flex;align-items:center;justify-content:space-between;gap:16px;font-size:13px;z-index:999;flex-wrap:wrap;}
+.cookie-banner a{color:#CECBF6;text-decoration:underline;cursor:pointer;}
+.cookie-accept{background:var(--purple);color:white;border:none;border-radius:8px;padding:8px 18px;font-size:13px;cursor:pointer;white-space:nowrap;}
+.cookie-accept:hover{background:var(--purple-dark);}
+</style>
+</head>
+<body>
+
+<!-- Cookie banner -->
+<div id="cookie-banner" class="cookie-banner" style="display:none">
+  <span>We use essential cookies to maintain your conversation session. No personal data is shared with third parties. <a onclick="showPrivacy()">Learn more</a></span>
+  <button class="cookie-accept" onclick="acceptCookies()">Got it</button>
+</div>
+
+<!-- Privacy modal -->
+<div class="modal-overlay" id="privacy-modal">
+  <div class="modal">
+    <button class="modal-close" onclick="closePrivacy()"><i class="ti ti-x"></i></button>
+    <h3>Cookie &amp; Privacy Notice</h3>
+    <p style="font-size:14px;line-height:1.7;color:var(--muted);margin-bottom:12px">
+      <strong style="color:var(--text)">What we store</strong><br>
+      We store a single session cookie (<code>hp_session</code>) in your browser. This cookie contains a random ID that lets us remember your conversation if you refresh the page.
+    </p>
+    <p style="font-size:14px;line-height:1.7;color:var(--muted);margin-bottom:12px">
+      <strong style="color:var(--text)">What we do NOT store</strong><br>
+      We do not store your name, email, phone number, or payment details in cookies. We do not use advertising or analytics cookies. We do not share any data with third parties.
+    </p>
+    <p style="font-size:14px;line-height:1.7;color:var(--muted);margin-bottom:12px">
+      <strong style="color:var(--text)">How long</strong><br>
+      The session cookie expires after 2 hours of inactivity, or when you close the browser.
+    </p>
+    <p style="font-size:14px;line-height:1.7;color:var(--muted)">
+      <strong style="color:var(--text)">Your rights (PIPEDA)</strong><br>
+      Under Canadian privacy law, you have the right to know what data we hold about you. This is a demo prototype — no data is retained after the session ends.
+    </p>
+    <button class="submit-btn" style="margin-top:16px" onclick="closePrivacy()"><i class="ti ti-check"></i> Close</button>
+  </div>
+</div>
+
+<!-- Landing -->
+<div id="landing">
+  <div class="hero">
+    <div class="paw"><i class="ti ti-paw"></i></div>
+    <h1>Happy Paws Pet Store</h1>
+    <p>Toronto's AI-powered pet service platform</p>
+  </div>
+  <div class="choice-grid">
+    <div class="choice-card" onclick="startAgent('buy-pet')">
+      <div class="icon"><i class="ti ti-heart"></i></div>
+      <div><div class="label">Buy a Pet</div><div class="sub">Find your perfect companion with AI guidance. Cats, dogs, and more.</div></div>
+    </div>
+    <div class="choice-card" onclick="startAgent('appointment')">
+      <div class="icon"><i class="ti ti-calendar"></i></div>
+      <div><div class="label">Book Appointment / Inquiries</div><div class="sub">Visit a store, see a specific pet, or get help with questions.</div></div>
+    </div>
+    <div class="choice-card" onclick="startAgent('products')">
+      <div class="icon"><i class="ti ti-shopping-cart"></i></div>
+      <div><div class="label">Pet Product Inquiry</div><div class="sub">Find food and supplies. Check stock and place orders.</div></div>
+    </div>
+    <div class="choice-card" onclick="startAgent('diagnose')">
+      <div class="icon"><i class="ti ti-stethoscope"></i></div>
+      <div><div class="label">After-Sales Support</div><div class="sub">Support for pets purchased from Happy Paws stores.</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- Agent View -->
+<div id="agent-view">
+  <div class="top-bar">
+    <button class="back-btn" onclick="goBack()"><i class="ti ti-arrow-left"></i> Back</button>
+    <div class="status"><div class="dot"></div><span id="agent-label">AI Agent</span></div>
+  </div>
+  <div class="chat-area" id="chat-area"></div>
+  <div id="quick-area" class="quick-btns"></div>
+  <div id="action-area"></div>
+  <div class="voice-status" id="voice-status"></div>
+  <div class="input-row">
+    <input id="user-input" type="text" placeholder="Type your message or use mic..." onkeydown="if(event.key==='Enter')sendMsg()"/>
+    <button class="mic-btn" id="mic-btn" onclick="toggleVoice()"><i class="ti ti-microphone"></i> <span id="mic-label">Voice</span></button>
+    <button class="send-btn" id="send-btn" onclick="sendMsg()"><i class="ti ti-send"></i></button>
+  </div>
+</div>
+
+<!-- Success View -->
+<div id="success-view">
+  <div class="success-card">
+    <div class="success-icon"><i class="ti ti-circle-check"></i></div>
+    <h2 id="success-title">Confirmed!</h2>
+    <p id="success-msg"></p>
+    <div class="ref-id" id="success-ref-id"></div>
+    <p>Confirmation email sent to <strong id="success-email"></strong>.</p>
+    <p style="margin-top:10px" id="success-sub"></p>
+    <button class="continue-btn" onclick="continueConversation()">Continue chatting</button>
+    <button class="home-btn" onclick="resetAll()">Back to Home</button>
+  </div>
+</div>
+
+<!-- Contact Modal -->
+<div class="modal-overlay" id="contact-modal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeContactModal()"><i class="ti ti-x"></i></button>
+    <h3><i class="ti ti-headset" style="color:var(--purple)"></i> Contact a Human Agent</h3>
+    <p>Fill in your details and our team will get back to you as soon as possible.</p>
+    <div class="field-row">
+      <input id="cm-name" placeholder="Full name"/>
+      <input id="cm-phone" placeholder="Phone number"/>
+    </div>
+    <input class="field-full" id="cm-email" type="email" placeholder="Email address"/>
+    <textarea class="field-full" id="cm-inquiry" rows="3" placeholder="Describe your inquiry..."></textarea>
+    <button class="submit-btn" onclick="submitContact()"><i class="ti ti-send"></i> Submit Inquiry</button>
+  </div>
+</div>
+
+<script>
+// ── State ──────────────────────────────────────────────────────────────────────
+let history=[], isLoading=false, currentFlow='', voiceModeActive=false, isSpeaking=false;
+let recognition=null, currentPetType='';
+let sessionId=null, currentStage='greeting';
+
+// ── Cookie helpers ─────────────────────────────────────────────────────────────
+function setCookie(name,value,hours){
+  const exp=new Date(Date.now()+hours*3600000).toUTCString();
+  document.cookie=name+'='+value+';expires='+exp+';path=/;SameSite=Lax';
+}
+function getCookie(name){
+  const m=document.cookie.match(new RegExp('(^| )'+name+'=([^;]+)'));
+  return m?m[2]:null;
+}
+function deleteCookie(name){
+  document.cookie=name+'=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/';
+}
+function acceptCookies(){
+  setCookie('hp_cookie_consent','1',24*365);
+  document.getElementById('cookie-banner').style.display='none';
+}
+function showPrivacy(){document.getElementById('privacy-modal').classList.add('open');}
+function closePrivacy(){document.getElementById('privacy-modal').classList.remove('open');}
+function initCookieBanner(){
+  if(!getCookie('hp_cookie_consent')){
+    document.getElementById('cookie-banner').style.display='flex';
+  }
+}
+let pendingOrderItem='', pendingOrderPrice=0, pendingOrderMethod='delivery', pendingAddons=[];
+
+const FLOW_LABELS={
+  'buy-pet':'Pet Purchase AI',
+  'appointment':'Appointment & Inquiries',
+  'products':'Pet Products Advisor',
+  'diagnose':'After-Sales Support'
+};
+const FLOW_STARTERS={
+  'buy-pet':"Hi there! Welcome to Happy Paws. I'm here to help you find your perfect furry companion. Are you thinking about a cat or a dog today?",
+  'appointment':"Hello! Welcome to Happy Paws. I can help you book an appointment or answer any questions. What brings you in today?",
+  'products':"Hi! Welcome to Happy Paws. I can help you find pet food and supplies, check availability, and place orders. What are you looking for? You can also browse our full range at www.happypaws-shop.ca",
+  'diagnose':"Hello! I'm here to help with after-sales support for pets purchased from Happy Paws. Was the pet you need help with purchased from one of our stores?"
+};
+const FLOW_QUICK={
+  'buy-pet':['Cat','Dog'],
+  'appointment':['See a specific pet','Browse products in-store','After-sales support','Other inquiry'],
+  'products':['Cat food','Dog food','Check stock','Where to buy online'],
+  'diagnose':['Yes, from Happy Paws','No, from elsewhere']
+};
+
+// ── Voice ──────────────────────────────────────────────────────────────────────
+const SpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;
+if(SpeechRecognition){
+  recognition=new SpeechRecognition();
+  recognition.continuous=false;recognition.interimResults=true;recognition.lang='en-US';
+  recognition.onstart=()=>{document.getElementById('user-input').classList.add('listening');document.getElementById('voice-status').textContent='Listening...';};
+  recognition.onresult=(e)=>{const t=Array.from(e.results).map(r=>r[0].transcript).join('');document.getElementById('user-input').value=t;if(e.results[e.results.length-1].isFinal)recognition.stop();};
+  recognition.onend=()=>{
+    document.getElementById('user-input').classList.remove('listening');
+    const text=document.getElementById('user-input').value.trim();
+    if(voiceModeActive&&text){document.getElementById('voice-status').textContent='Processing...';sendMsg();}
+    else if(voiceModeActive)setTimeout(()=>{if(voiceModeActive&&!isSpeaking)startListening();},500);
+    else document.getElementById('voice-status').textContent='';
+  };
+  recognition.onerror=(e)=>{
+    if(e.error==='no-speech'&&voiceModeActive)setTimeout(()=>{if(voiceModeActive&&!isSpeaking)startListening();},500);
+    else document.getElementById('voice-status').textContent='Mic error: '+e.error;
+  };
+}
+function startListening(){if(!recognition||isSpeaking)return;try{document.getElementById('user-input').value='';recognition.start();}catch(e){}}
+function toggleVoice(){
+  if(!recognition){alert('Voice input is not supported. Please use Chrome.');return;}
+  voiceModeActive=!voiceModeActive;
+  const btn=document.getElementById('mic-btn'),lbl=document.getElementById('mic-label');
+  if(voiceModeActive){btn.classList.add('active');lbl.textContent='Stop';document.getElementById('voice-status').textContent='Voice mode ON';startListening();}
+  else{btn.classList.remove('active');lbl.textContent='Voice';document.getElementById('voice-status').textContent='';window.speechSynthesis&&window.speechSynthesis.cancel();try{recognition.stop();}catch(e){}isSpeaking=false;}
+}
+function getBestVoice(){
+  const voices=window.speechSynthesis.getVoices();
+  const preferred=['Samantha','Karen','Serena','Google US English','Microsoft Aria Online (Natural)','Microsoft Jenny Online (Natural)','Microsoft Zira'];
+  for(const n of preferred){const v=voices.find(v=>v.name.includes(n));if(v)return v;}
+  return voices.find(v=>v.lang==='en-US')||voices.find(v=>v.lang.startsWith('en'))||null;
+}
+// Strip emoji and action tags before speaking
+function cleanForSpeech(text){
+  return text
+    .replace(/\[ACTION:[^\]]+\]/g,'')
+    .replace(/[\u{1F000}-\u{1FFFF}]/gu,'')
+    .replace(/[\u{2600}-\u{27BF}]/gu,'')
+    .replace(/[\u{FE00}-\u{FEFF}]/gu,'')
+    .replace(/[*#_`]/g,'')
+    .replace(/<[^>]+>/g,'')
+    .replace(/\s+/g,' ')
+    .trim()
+    .substring(0,500);
+}
+function speak(text){
+  if(!window.speechSynthesis)return;
+  window.speechSynthesis.cancel();
+  const clean=cleanForSpeech(text);if(!clean)return;
+  const utt=new SpeechSynthesisUtterance(clean);
+  utt.lang='en-US';utt.rate=1.08;utt.pitch=1.15;utt.volume=1.0;
+  const go=()=>{
+    const v=getBestVoice();if(v)utt.voice=v;
+    utt.onstart=()=>{isSpeaking=true;};
+    utt.onend=()=>{isSpeaking=false;if(voiceModeActive){document.getElementById('voice-status').textContent='Listening...';setTimeout(()=>{if(voiceModeActive&&!isSpeaking)startListening();},400);}};
+    utt.onerror=()=>{isSpeaking=false;if(voiceModeActive)startListening();};
+    window.speechSynthesis.speak(utt);
+  };
+  if(window.speechSynthesis.getVoices().length===0){window.speechSynthesis.onvoiceschanged=go;}else{go();}
+}
+
+// ── Pet images ─────────────────────────────────────────────────────────────────
+const CAT_BREEDS=['british shorthair','ragdoll','persian','scottish fold','bengal','russian blue','maine coon','siamese'];
+const DOG_BREEDS=['golden retriever','labrador','cavalier king charles','beagle','border collie','husky','shih tzu','poodle','corgi'];
+const CAT_MAP={'british shorthair':'bsho','ragdoll':'ragd','persian':'pers','scottish fold':'sfol','bengal':'beng','russian blue':'rblu','maine coon':'mcoo','siamese':'siam'};
+const DOG_MAP={'golden retriever':'retriever/golden','labrador':'labrador','cavalier king charles':'spaniel/cocker','beagle':'beagle','border collie':'collie/border','husky':'husky','shih tzu':'shihtzu','poodle':'poodle/standard','corgi':'corgi/cardigan'};
+
+async function fetchPetImage(breed,type){
+  const l=breed.toLowerCase();
+  try{
+    if(type==='dog'){
+      const k=Object.keys(DOG_MAP).find(k=>l.includes(k));
+      if(k){const r=await fetch('https://dog.ceo/api/breed/'+DOG_MAP[k]+'/images/random');const d=await r.json();return d.status==='success'?d.message:null;}
+      const r=await fetch('https://dog.ceo/api/breeds/image/random');const d=await r.json();return d.message||null;
+    }
+    const k=Object.keys(CAT_MAP).find(k=>l.includes(k));
+    const id=k?CAT_MAP[k]:null;
+    const url=id?'https://api.thecatapi.com/v1/images/search?breed_ids='+id+'&limit=1':'https://api.thecatapi.com/v1/images/search?limit=1';
+    const r=await fetch(url);const d=await r.json();return d[0]?.url||null;
+  }catch{return null;}
+}
+async function addPetImage(breed,type){
+  if(currentFlow!=='buy-pet')return;
+  const url=await fetchPetImage(breed,type);if(!url)return;
+  const area=document.getElementById('chat-area');
+  const d=document.createElement('div');d.className='msg ai';
+  d.innerHTML='<div class="avatar ai-av">AI</div><div class="pet-img-card"><img src="'+url+'" alt="'+breed+'" onerror="this.parentElement.parentElement.remove()"/><div class="pet-img-label"><i class="ti ti-camera"></i> '+breed+'</div></div>';
+  area.appendChild(d);area.scrollTop=area.scrollHeight;
+}
+function detectBreedImages(text){
+  if(currentFlow!=='buy-pet')return;
+  const lower=text.toLowerCase();
+  const isRec=lower.includes('recommend')||lower.includes('perfect for')||lower.includes('great match')||lower.includes('suggest')||lower.includes('would be a great')||lower.includes('would suit')||lower.includes('available');
+  if(!isRec)return;
+  // Only show images matching the current pet type
+  if(currentPetType==='cat')CAT_BREEDS.filter(b=>lower.includes(b)).forEach(b=>addPetImage(b,'cat'));
+  else if(currentPetType==='dog')DOG_BREEDS.filter(b=>lower.includes(b)).forEach(b=>addPetImage(b,'dog'));
+}
+
+// ── Core flow ──────────────────────────────────────────────────────────────────
+async function startAgent(flow){
+  currentFlow=flow;history=[];currentPetType='';pendingAddons=[];
+  currentStage='greeting';
+  document.getElementById('landing').style.display='none';
+  document.getElementById('agent-view').style.display='block';
+  document.getElementById('chat-area').innerHTML='';
+  document.getElementById('quick-area').innerHTML='';
+  document.getElementById('action-area').innerHTML='';
+  document.getElementById('agent-label').textContent=FLOW_LABELS[flow];
+  // Try to restore existing session from cookie
+  const savedId=getCookie('hp_session_'+flow);
+  if(savedId){
+    try{
+      const check=await fetch('/session/'+savedId);
+      if(check.ok){
+        sessionId=savedId;
+        const data=await check.json();
+        currentStage=data.stage||'greeting';
+        const starter='Welcome back! Picking up where we left off. What can I help you with?';
+        addAI(starter);speak(starter);
+        showQuick(['Continue our conversation','Start a new conversation']);
+        return;
+      }
+    }catch(e){}
+  }
+  // No valid saved session — create a new one
+  sessionId=null;
+  try{
+    const res=await fetch('/session/start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({flow})});
+    const data=await res.json();
+    sessionId=data.session_id;
+    currentStage=data.stage;
+    setCookie('hp_session_'+flow, sessionId, 2);
+  }catch(e){console.warn('Session start failed, continuing without tracking.');}
+  const starter=FLOW_STARTERS[flow];
+  addAI(starter);speak(starter);
+  if(FLOW_QUICK[flow])showQuick(FLOW_QUICK[flow]);
+}
+function goBack(){
+  deleteCookie('hp_session_'+currentFlow);
+  voiceModeActive=false;isSpeaking=false;
+  window.speechSynthesis&&window.speechSynthesis.cancel();
+  try{recognition&&recognition.stop();}catch(e){}
+  document.getElementById('mic-btn').classList.remove('active');
+  document.getElementById('mic-label').textContent='Voice';
+  document.getElementById('voice-status').textContent='';
+  document.getElementById('landing').style.display='block';
+  document.getElementById('agent-view').style.display='none';
+  document.getElementById('success-view').style.display='none';
+}
+function resetAll(){
+  document.getElementById('success-view').style.display='none';
+  document.getElementById('landing').style.display='block';
+}
+function continueConversation(){
+  document.getElementById('success-view').style.display='none';
+  document.getElementById('agent-view').style.display='block';
+  const msg='Is there anything else I can help you with today?';
+  addAI(msg);speak(msg);
+  showQuick(['Yes, I have a question',"No, I'm all set - thank you!"]);
+}
+
+// ── Message rendering ──────────────────────────────────────────────────────────
+function fmt(t){
+  return t
+    .replace(/\[ACTION:[^\]]+\]/g,'')
+    .trim()
+    .replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>')
+    .replace(/\n/g,'<br>');
+}
+function addAI(text){
+  const area=document.getElementById('chat-area');
+  const d=document.createElement('div');d.className='msg ai';
+  d.innerHTML='<div class="avatar ai-av">AI</div><div class="bubble">'+fmt(text)+'</div>';
+  area.appendChild(d);area.scrollTop=area.scrollHeight;
+  checkAction(text);
+  const lower=text.toLowerCase();
+  // Track pet type strictly - only update if ONLY that pet is mentioned
+  if(lower.includes(' cat ')&&!lower.includes(' dog '))currentPetType='cat';
+  else if(lower.includes(' dog ')&&!lower.includes(' cat '))currentPetType='dog';
+  else if(lower.includes('kitten'))currentPetType='cat';
+  else if(lower.includes('puppy'))currentPetType='dog';
+  detectBreedImages(text);
+}
+function addUser(text){
+  const area=document.getElementById('chat-area');
+  const d=document.createElement('div');d.className='msg user';
+  d.innerHTML='<div class="avatar u-av"><i class="ti ti-user" style="font-size:14px"></i></div><div class="bubble">'+text+'</div>';
+  area.appendChild(d);area.scrollTop=area.scrollHeight;
+  const l=text.toLowerCase();
+  if(l==='cat'||l.includes('a cat')||l.startsWith('cat')||l.includes('kitten'))currentPetType='cat';
+  else if(l==='dog'||l.includes('a dog')||l.startsWith('dog')||l.includes('puppy'))currentPetType='dog';
+}
+function showQuick(opts){
+  const area=document.getElementById('quick-area');area.innerHTML='';
+  opts.forEach(o=>{
+    const b=document.createElement('button');b.className='qbtn';b.textContent=o;
+    b.onclick=()=>{area.innerHTML='';handle(o);};
+    area.appendChild(b);
+  });
+}
+function showTyping(){
+  const area=document.getElementById('chat-area');
+  const d=document.createElement('div');d.className='msg ai';d.id='typing';
+  d.innerHTML='<div class="avatar ai-av">AI</div><div class="bubble"><div class="typing"><span></span><span></span><span></span></div></div>';
+  area.appendChild(d);area.scrollTop=area.scrollHeight;
+}
+function removeTyping(){const t=document.getElementById('typing');if(t)t.remove();}
+
+// ── Safety banner ─────────────────────────────────────────────────────────────
+function showSafetyBanner(level){
+  const prev=document.getElementById('safety-banner');if(prev)prev.remove();
+  if(!level||level==='routine'||level==='none')return;
+  const cfg={
+    emergency:{cls:'safety-emergency',icon:'ti-urgent',msg:'This sounds like a veterinary emergency. Please contact an emergency vet immediately and do not wait.'},
+    urgent:{cls:'safety-urgent',icon:'ti-alert-triangle',msg:'These symptoms need prompt veterinary attention — ideally within the next few hours.'},
+    monitor:{cls:'safety-monitor',icon:'ti-eye',msg:'Please monitor these symptoms closely. If they worsen or persist beyond 24 hours, consult a veterinarian.'}
+  };
+  const c=cfg[level];if(!c)return;
+  const el=document.createElement('div');
+  el.id='safety-banner';
+  el.className='safety-banner '+c.cls;
+  el.innerHTML='<i class="ti '+c.icon+'" style="font-size:16px;flex-shrink:0;margin-top:1px"></i><span>'+c.msg+'</span>';
+  const area=document.getElementById('action-area');
+  area.prepend(el);
+}
+
+// ── Chat send ──────────────────────────────────────────────────────────────────
+function sendMsg(){
+  const inp=document.getElementById('user-input');
+  const text=inp.value.trim();
+  if(!text||isLoading)return;
+  inp.value='';
+  document.getElementById('quick-area').innerHTML='';
+  document.getElementById('action-area').innerHTML='';
+  handle(text);
+}
+async function handle(text){
+  addUser(text);
+  history.push({role:'user',content:text});
+  isLoading=true;
+  document.getElementById('send-btn').disabled=true;
+  showTyping();
+  try{
+    const res=await fetch('/chat',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({messages:history,flow:currentFlow,session_id:sessionId})
+    });
+    const data=await res.json();
+    if(data.error)throw new Error(data.error.message);
+    const reply=data.choices[0].message.content;
+    // Store session_id returned by server (first message creates one)
+    if(data.session_id){sessionId=data.session_id;setCookie('hp_session_'+currentFlow,sessionId,2);}
+    if(data.stage)currentStage=data.stage;
+    if(data.safety_level)showSafetyBanner(data.safety_level);
+    history.push({role:'assistant',content:reply});
+    removeTyping();
+    addAI(reply);
+    speak(reply);
+    const lower=reply.toLowerCase();
+    if(!reply.includes('[ACTION:')&&currentFlow==='buy-pet'&&(lower.includes('delivery')||lower.includes('pick up')||lower.includes('in person'))){
+      showQuick(['Home delivery','In-store pickup','Visit in person first']);
+    }
+    if(!reply.includes('[ACTION:')&&(lower.includes('further question')||lower.includes('anything else')||lower.includes('help you with'))){
+      showQuick(['Yes, I have a question',"No, I'm all set - thank you!"]);
+    }
+  }catch(err){
+    removeTyping();
+    addAI('Something went wrong: '+err.message+'. Please try again.');
+  }
+  isLoading=false;
+  document.getElementById('send-btn').disabled=false;
+}
+
+// ── Action dispatcher ──────────────────────────────────────────────────────────
+function checkAction(text){
+  const area=document.getElementById('action-area');area.innerHTML='';
+  // Pet checkout
+  const co=text.match(/\[ACTION:CHECKOUT\|([^|]+)\|([^|]+)\|([^\]]+)\]/);
+  if(co){const price=safeNum(co[2]);showCheckout(co[1],price,co[3]);return;}
+  // Product order
+  const po=text.match(/\[ACTION:PRODUCT_ORDER\|([^|]+)\|([^|]+)\|([^\]]+)\]/);
+  if(po){const price=safeNum(po[2]);showProductCheckout(po[1],price,po[3]);return;}
+  // Appointment form
+  if(text.includes('[ACTION:SHOW_APPT_FORM]')||text.includes('[ACTION:BOOK_APPOINTMENT]')){showAppointmentForm();return;}
+  // Contact form (modal)
+  if(text.includes('[ACTION:CONTACT_FORM]')){openContactModal();return;}
+  // Lead form
+  if(text.includes('[ACTION:LEAD_FORM]')){showLeadForm();return;}
+  // Escalate button
+  if(text.includes('[ACTION:ESCALATE]')){
+    area.innerHTML='<button class="escalate-btn" onclick="openContactModal()"><i class="ti ti-headset"></i> Connect me to a human agent</button>';
+    return;
+  }
+}
+
+// ── Pricing helpers ────────────────────────────────────────────────────────────
+function safeNum(val){
+  if(val===null||val===undefined||val==='')return 0;
+  const cleaned=String(val).replace(/[$,\s]/g,'');
+  const n=parseFloat(cleaned);
+  return isNaN(n)?0:n;
+}
+function calcOrder(itemPrice,addons,method,isPet,isGta){
+  const ip=safeNum(itemPrice);
+  const addonsTotal=(addons||[]).reduce((s,a)=>s+safeNum(a.price),0);
+  const subtotal=Math.round((ip+addonsTotal)*100)/100;
+  const tax=Math.round(subtotal*0.13*100)/100;
+  let fee=0;
+  if(method==='delivery'){
+    if(isPet){fee=isGta?50.0:Math.round((subtotal*0.08+30)*100)/100;}
+    else{fee=subtotal>=60?0:9.99;}
+  }
+  const total=Math.round((subtotal+tax+fee)*100)/100;
+  return{subtotal,tax,fee,total};
+}
+function fmt2(n){return safeNum(n).toFixed(2);}
+function buildSummaryRows(itemName,itemPrice,addons,method,isPet,isGta){
+  const ip=safeNum(itemPrice);
+  const{tax,fee,total}=calcOrder(ip,addons,method,isPet,isGta);
+  let rows='<tr><td>'+itemName+'</td><td style="text-align:right">$'+fmt2(ip)+'</td></tr>';
+  (addons||[]).forEach(a=>{rows+='<tr><td>'+a.name+'</td><td style="text-align:right">$'+fmt2(a.price)+'</td></tr>';});
+  rows+='<tr><td style="color:#6b6b6b">Tax (HST 13%)</td><td style="text-align:right">$'+fmt2(tax)+'</td></tr>';
+  rows+='<tr><td style="color:#6b6b6b">Delivery Fee</td><td style="text-align:right">'+(fee===0?'FREE':'$'+fmt2(fee))+'</td></tr>';
+  rows+='<tr style="border-top:1px solid rgba(83,74,183,0.2)"><td style="padding-top:8px;font-weight:700;color:#534AB7">Total</td><td style="padding-top:8px;font-weight:700;color:#534AB7;text-align:right">$'+fmt2(total)+'</td></tr>';
+  return rows;
+}
+function getSelectedAddons(){
+  const addons=[];
+  document.querySelectorAll('[id^="addon-"]').forEach(cb=>{
+    if(cb.checked)addons.push({name:cb.dataset.name,price:parseFloat(cb.value)});
+  });
+  return addons;
+}
+function fmtCard(el){let v=el.value.replace(/\D/g,'').substring(0,16);el.value=v.match(/.{1,4}/g)?.join(' ')||v;}
+function fmtExp(el){let v=el.value.replace(/\D/g,'');if(v.length>=2)v=v.substring(0,2)+' / '+v.substring(2,4);el.value=v;}
+
+// ── Appointment form ───────────────────────────────────────────────────────────
+function showAppointmentForm(){
+  const now=new Date();
+  const minDate=new Date(now.getTime()+2*3600000).toISOString().split('T')[0];
+  document.getElementById('action-area').innerHTML=`
+    <div class="action-card">
+      <h3><i class="ti ti-calendar"></i> Book an Appointment</h3>
+      <div id="appt-error" class="error-badge" style="display:none"><i class="ti ti-alert-circle"></i> <span id="appt-error-msg"></span></div>
+      <div class="section-label">Contact Information</div>
+      <div class="field-row">
+        <input id="ap-name" placeholder="Full name"/>
+        <input id="ap-phone" placeholder="Phone number"/>
+      </div>
+      <input class="field-full" id="ap-email" type="email" placeholder="Email address"/>
+      <div class="section-label">Appointment Details</div>
+      <select class="field-full" id="ap-store" onchange="loadSlots()">
+        <option value="">Choose a store...</option>
+        <option>Happy Paws Downtown - 123 King Street West, Toronto</option>
+        <option>Happy Paws Midtown - 456 Yonge Street, Toronto</option>
+        <option>Happy Paws East End - 789 Danforth Avenue, Toronto</option>
+      </select>
+      <div class="field-row">
+        <input id="ap-date" type="date" min="${minDate}" onchange="loadSlots()"/>
+        <select id="ap-time"><option value="">Select time...</option></select>
+      </div>
+      <input class="field-full" id="ap-reason" placeholder="Reason for visit (e.g. View a British Shorthair kitten, After-sales support)"/>
+      <button class="submit-btn" onclick="submitAppointment()"><i class="ti ti-check"></i> Confirm Appointment</button>
+    </div>`;
+}
+
+const ALL_SLOTS=['11:00 AM','11:30 AM','12:00 PM','12:30 PM','1:00 PM','1:30 PM','2:00 PM','2:30 PM','3:00 PM','3:30 PM','4:00 PM','4:30 PM','5:00 PM','5:30 PM','6:00 PM','6:30 PM','7:00 PM','7:30 PM'];
+
+async function loadSlots(){
+  const store=document.getElementById('ap-store')?.value;
+  const date=document.getElementById('ap-date')?.value;
+  const sel=document.getElementById('ap-time');
+  if(!sel)return;
+  sel.innerHTML='<option value="">Loading slots...</option>';
+  if(!store||!date){sel.innerHTML='<option value="">Select store and date first...</option>';return;}
+  // Check each slot against the server
+  const now=new Date();
+  const twoHoursLater=new Date(now.getTime()+2*3600000);
+  const available=[];
+  for(const slot of ALL_SLOTS){
+    try{
+      const res=await fetch('/check-slot',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({store,date,time:slot})});
+      const d=await res.json();
+      if(d.available&&d.enough_notice)available.push(slot);
+    }catch{available.push(slot);}// if check fails, show the slot
+  }
+  sel.innerHTML='<option value="">Select a time...</option>';
+  if(available.length===0){sel.innerHTML='<option value="">No slots available - please try another date</option>';return;}
+  available.forEach(s=>{const o=document.createElement('option');o.value=s;o.textContent=s;sel.appendChild(o);});
+}
+
+async function submitAppointment(){
+  const name=document.getElementById('ap-name').value.trim();
+  const phone=document.getElementById('ap-phone').value.trim();
+  const email=document.getElementById('ap-email').value.trim();
+  const store=document.getElementById('ap-store').value;
+  const date=document.getElementById('ap-date').value;
+  const time=document.getElementById('ap-time').value;
+  const reason=document.getElementById('ap-reason').value.trim();
+  const errEl=document.getElementById('appt-error');
+  const errMsg=document.getElementById('appt-error-msg');
+  if(!name||!phone||!email||!store||!date||!time||!reason){
+    errEl.style.display='flex';errMsg.textContent='Please fill in all fields.';return;
+  }
+  errEl.style.display='none';
+  const btn=document.querySelector('#action-area .submit-btn');btn.disabled=true;btn.innerHTML='Booking...';
+  try{
+    const res=await fetch('/appointment',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,phone,email,store,date,time,reason})});
+    const data=await res.json();
+    if(!data.success){
+      errEl.style.display='flex';errMsg.textContent=data.error||'Booking failed.';
+      btn.disabled=false;btn.innerHTML='<i class="ti ti-check"></i> Confirm Appointment';
+      // Reload slots to reflect any changes
+      await loadSlots();
+      return;
+    }
+    document.getElementById('action-area').innerHTML='';
+    const storeShort=store.split(' - ')[0];
+    showSuccess('Appointment Confirmed!','Your appointment ID is:',data.appt_id,email,storeShort+' on '+date+' at '+time+'. Please arrive 5 minutes early!');
+    speak('Your appointment is confirmed! We look forward to seeing you at Happy Paws!');
+  }catch(err){
+    errEl.style.display='flex';errMsg.textContent='Something went wrong. Please try again.';
+    btn.disabled=false;btn.innerHTML='<i class="ti ti-check"></i> Confirm Appointment';
+  }
+}
+
+// ── Pet checkout ───────────────────────────────────────────────────────────────
+function showCheckout(item,itemPrice,method){
+  const isPet=currentFlow==='buy-pet';
+  const isPickup=method==='pickup';
+  const storeOpts='<option value="">Select store...</option><option>Happy Paws Downtown - 123 King Street West</option><option>Happy Paws Midtown - 456 Yonge Street</option><option>Happy Paws East End - 789 Danforth Avenue</option>';
+  const addonSuggestions=isPet&&currentPetType==='cat'
+    ?[{name:'Royal Canin Kitten Dry Food 2kg',price:32.99},{name:'Hills Science Diet Kitten 1.6kg',price:28.99},{name:'Whiskas Kitten Wet Food 12-pack',price:16.99}]
+    :isPet&&currentPetType==='dog'
+    ?[{name:'Royal Canin Dog Food 4kg',price:45.99},{name:'Hills Science Diet Puppy 3kg',price:38.99}]
+    :[];
+  const addonHtml=addonSuggestions.length?`
+    <div class="section-label">Add Recommended Products</div>
+    ${addonSuggestions.map((a,i)=>`<label style="display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:13px;cursor:pointer"><input type="checkbox" id="addon-${i}" onchange="updateSummary('${item}',${itemPrice},'${method}',${isPet})" value="${a.price}" data-name="${a.name}"/> ${a.name} - $${a.price}</label>`).join('')}`:'';
+
+  document.getElementById('action-area').innerHTML=`
+    <div class="action-card">
+      <h3><i class="ti ti-credit-card"></i> Complete Your Purchase</h3>
+      <div class="mock-badge"><i class="ti ti-info-circle"></i> Demo mode - no real payment charged</div>
+      <div class="order-summary-box" id="summary-box">
+        <div class="item-name">${item} - ${isPickup?'In-store Pickup':'Home Delivery'}</div>
+        <table width="100%" style="font-size:13px">${buildSummaryRows(item,itemPrice,[],method,isPet,true)}</table>
+      </div>
+      ${addonHtml}
+      <div class="section-label">Contact Information</div>
+      <div class="field-row"><input id="co-name" placeholder="Full name"/><input id="co-phone" placeholder="Phone number"/></div>
+      <input class="field-full" id="co-email" type="email" placeholder="Email address"/>
+      ${isPickup?`
+        <div class="section-label">Pickup Details</div>
+        <select class="field-full" id="co-store"><${storeOpts}</select>
+        <input class="field-full" id="co-pickup-time" placeholder="Preferred pickup date & time (e.g. Sat June 7, 2:00 PM)"/>
+      `:`
+        <div class="section-label">Delivery Address</div>
+        <input class="field-full" id="co-addr" placeholder="Street address"/>
+        <div class="field-row"><input id="co-city" placeholder="City"/><input id="co-zip" placeholder="Postal code"/></div>
+        <select class="field-full" id="co-area" onchange="updateSummary('${item}',${itemPrice},'${method}',${isPet})">
+          <option value="gta">Within GTA ($50 delivery fee)</option>
+          <option value="ontario">Outside GTA, Ontario (calculated)</option>
+        </select>
+        <input class="field-full" id="co-delivery-time" placeholder="Preferred delivery date & time (e.g. Sat June 7, 2:00-4:00 PM)"/>
+      `}
+      <div class="section-label">Payment Information</div>
+      <input class="field-full" id="co-card" placeholder="Card number" maxlength="19" oninput="fmtCard(this)"/>
+      <div class="card-row"><input id="co-exp" placeholder="MM / YY" maxlength="7" oninput="fmtExp(this)"/><input id="co-cvc" placeholder="CVC" maxlength="3"/></div>
+      <button class="submit-btn" id="pay-btn" onclick="submitOrder('${item}',${itemPrice},'${method}',${isPet})">
+        <i class="ti ti-lock"></i> Confirm &amp; Pay
+      </button>
+    </div>`;
+}
+
+function updateSummary(item,itemPrice,method,isPet){
+  const ip=safeNum(itemPrice);
+  const addons=getSelectedAddons();
+  const areaEl=document.getElementById('co-area');
+  const isGta=!areaEl||areaEl.value==='gta';
+  const box=document.getElementById('summary-box');
+  if(!box)return;
+  const isPickup=method==='pickup';
+  box.innerHTML='<div class="item-name">'+item+' - '+(isPickup?'In-store Pickup':'Home Delivery')+'</div><table width="100%" style="font-size:13px">'+buildSummaryRows(item,ip,addons,method,isPet,isGta)+'</table>';
+}
+
+async function submitOrder(item,itemPrice,method,isPet){
+  const ip=safeNum(itemPrice);
+  const name=document.getElementById('co-name')?.value.trim()||'';
+  const phone=document.getElementById('co-phone')?.value.trim()||'';
+  const email=document.getElementById('co-email')?.value.trim()||'';
+  const card=document.getElementById('co-card')?.value.replace(/\s/g,'')||'';
+  if(!name||!phone||!email||card.length<16){alert('Please fill in all required fields.');return;}
+  const addons=getSelectedAddons();
+  const areaEl=document.getElementById('co-area');
+  const isGta=!areaEl||areaEl.value==='gta';
+  const{fee,total}=calcOrder(ip,addons,method,isPet,isGta);
+  let address='',pickupStore='',pickupTime='',deliveryTime='',deliveryFromStore='Happy Paws Downtown';
+  if(method==='pickup'){
+    pickupStore=document.getElementById('co-store')?.value||'';
+    pickupTime=document.getElementById('co-pickup-time')?.value||'';
+    if(!pickupStore||!pickupTime){alert('Please select a pickup store and preferred pickup time.');return;}
+    deliveryFromStore=pickupStore;
+  }else{
+    const addr=document.getElementById('co-addr')?.value.trim()||'';
+    const city=document.getElementById('co-city')?.value.trim()||'';
+    const zip=document.getElementById('co-zip')?.value.trim()||'';
+    if(!addr||!city||!zip){alert('Please fill in your delivery address.');return;}
+    address=addr+', '+city+' '+zip;
+    deliveryTime=document.getElementById('co-delivery-time')?.value||'';
+    if(isPet&&!deliveryTime){alert('Please enter your preferred delivery date and time.');return;}
+    const stores=['Happy Paws Downtown','Happy Paws Midtown','Happy Paws East End'];
+    deliveryFromStore=stores[Math.floor(Math.random()*stores.length)];
+  }
+  const btn=document.getElementById('pay-btn');btn.disabled=true;btn.innerHTML='Processing...';
+  try{
+    const res=await fetch('/order',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({name,phone,email,item,item_price:ip,addons,method,address,pickup_store:pickupStore,pickup_time:pickupTime,delivery_time:deliveryTime,delivery_from_store:deliveryFromStore,card_last4:card.slice(-4),is_pet:isPet,is_gta:isGta})});
+    const data=await res.json();
+    document.getElementById('action-area').innerHTML='';
+    const sub=method==='pickup'
+      ?'We will email you at '+email+' when your order is ready for pickup at '+pickupStore+'.'
+      :'Estimated delivery: 3-5 business days. Our staff will call you before the pet is delivered.';
+    showSuccess('Order Confirmed!','Your order ID is:',data.order_id,email,sub);
+    speak('Order confirmed! Your order ID is '+data.order_id+'. A confirmation email has been sent to you.');
+  }catch(err){alert('Something went wrong. Please try again.');btn.disabled=false;btn.innerHTML='<i class="ti ti-lock"></i> Confirm & Pay';}
+}
+
+// ── Product checkout ───────────────────────────────────────────────────────────
+function showProductCheckout(product,price,method){
+  const ip=safeNum(price);
+  const isPickup=method==='pickup';
+  const{tax,fee,total}=calcOrder(ip,[],method,false,true);
+  document.getElementById('action-area').innerHTML=`
+    <div class="action-card">
+      <h3><i class="ti ti-shopping-bag"></i> ${isPickup?'Pickup & Purchase':'Online Order & Delivery'}</h3>
+      <div class="mock-badge"><i class="ti ti-info-circle"></i> Demo mode - no real payment charged</div>
+      <div class="order-summary-box" id="prod-summary">
+        <div class="item-name">${product}</div>
+        <table width="100%" style="font-size:13px" id="prod-summary-table">
+          <tr><td>${product}</td><td style="text-align:right">$${fmt2(ip)}</td></tr>
+          <tr><td style="color:#6b6b6b">Tax (HST 13%)</td><td style="text-align:right">$${fmt2(tax)}</td></tr>
+          <tr><td style="color:#6b6b6b">Delivery Fee</td><td style="text-align:right">${fee===0?'FREE':'$'+fmt2(fee)}</td></tr>
+          <tr style="border-top:1px solid rgba(83,74,183,0.2)"><td style="padding-top:8px;font-weight:700;color:#534AB7">Total</td><td style="padding-top:8px;font-weight:700;color:#534AB7;text-align:right">$${fmt2(total)}</td></tr>
+        </table>
+      </div>
+      <div class="section-label">Contact Information</div>
+      <div class="field-row"><input id="pd-name" placeholder="Full name"/><input id="pd-phone" placeholder="Phone number"/></div>
+      <input class="field-full" id="pd-email" type="email" placeholder="Email address"/>
+      ${isPickup?`
+        <div class="section-label">Pickup Details</div>
+        <select class="field-full" id="pd-store">
+          <option value="">Select pickup location...</option>
+          <option>Happy Paws Downtown - 123 King Street West, Toronto</option>
+          <option>Happy Paws Midtown - 456 Yonge Street, Toronto</option>
+          <option>Happy Paws East End - 789 Danforth Avenue, Toronto</option>
+        </select>
+        <div class="field-row">
+          <input id="pd-date" type="date"/>
+          <select id="pd-time">
+            <option value="">Pickup time...</option>
+            ${ALL_SLOTS.map(s=>`<option>${s}</option>`).join('')}
+          </select>
+        </div>
+      `:`
+        <div class="section-label">Delivery Address</div>
+        <input class="field-full" id="pd-addr" placeholder="Street address"/>
+        <div class="field-row"><input id="pd-city" placeholder="City"/><input id="pd-zip" placeholder="Postal code"/></div>
+        <div class="info-badge"><i class="ti ti-truck"></i> Estimated delivery: 1-3 business days. Free delivery on orders over $60 within GTA.</div>
+      `}
+      <div class="section-label">Payment Information</div>
+      <input class="field-full" id="pd-card" placeholder="Card number" maxlength="19" oninput="fmtCard(this)"/>
+      <div class="card-row"><input id="pd-exp" placeholder="MM / YY" maxlength="7" oninput="fmtExp(this)"/><input id="pd-cvc" placeholder="CVC" maxlength="3"/></div>
+      <button class="submit-btn" id="pd-pay-btn" onclick="submitProductOrder('${product}',${ip},'${method}')">
+        <i class="ti ti-lock"></i> Pay $${fmt2(total)} - Confirm Order
+      </button>
+    </div>`;
+  if(isPickup){const d=document.getElementById('pd-date');if(d)d.min=new Date().toISOString().split('T')[0];}
+}
+
+async function submitProductOrder(product,itemPrice,method){
+  const ip=safeNum(itemPrice);
+  const name=document.getElementById('pd-name')?.value.trim()||'';
+  const phone=document.getElementById('pd-phone')?.value.trim()||'';
+  const email=document.getElementById('pd-email')?.value.trim()||'';
+  const card=document.getElementById('pd-card')?.value.replace(/\s/g,'')||'';
+  if(!name||!phone||!email||card.length<16){alert('Please fill in all required fields.');return;}
+  const isPickup=method==='pickup';
+  let address='',pickupStore='',pickupTime='';
+  if(isPickup){
+    pickupStore=document.getElementById('pd-store')?.value||'';
+    const date=document.getElementById('pd-date')?.value||'';
+    const time=document.getElementById('pd-time')?.value||'';
+    pickupTime=date+(time?' at '+time:'');
+    if(!pickupStore||!date||!time){alert('Please select a pickup store, date, and time.');return;}
+  }else{
+    const addr=document.getElementById('pd-addr')?.value.trim()||'';
+    const city=document.getElementById('pd-city')?.value.trim()||'';
+    const zip=document.getElementById('pd-zip')?.value.trim()||'';
+    if(!addr||!city||!zip){alert('Please fill in your delivery address.');return;}
+    address=addr+', '+city+' '+zip;
+  }
+  const btn=document.getElementById('pd-pay-btn');btn.disabled=true;btn.innerHTML='Processing...';
+  try{
+    const res=await fetch('/order',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({name,phone,email,item:product,item_price:ip,addons:[],method,address,pickup_store:pickupStore,pickup_time:pickupTime,delivery_time:'',delivery_from_store:'',card_last4:card.slice(-4),is_pet:false,is_gta:true})});
+    const data=await res.json();
+    document.getElementById('action-area').innerHTML='';
+    const sub=isPickup
+      ?'We will email you at '+email+' when your order is ready for pickup at '+pickupStore+'.'
+      :'Estimated delivery: 1-3 business days to '+address+'.';
+    showSuccess('Order Confirmed!','Your order ID is:',data.order_id,email,sub);
+    speak('Order confirmed! Your order ID is '+data.order_id+'. A confirmation email has been sent.');
+  }catch(err){alert('Something went wrong. Please try again.');btn.disabled=false;btn.innerHTML='<i class="ti ti-lock"></i> Confirm Order';}
+}
+
+// ── Lead form ──────────────────────────────────────────────────────────────────
+function showLeadForm(){
+  document.getElementById('action-area').innerHTML=`
+    <div class="action-card">
+      <h3><i class="ti ti-user-check"></i> Leave your contact details</h3>
+      <div class="field-row"><input id="ln" placeholder="Your name"/><input id="lp" placeholder="Phone number"/></div>
+      <input class="field-full" id="le" type="email" placeholder="Email address"/>
+      <textarea class="field-full" id="lnotes" rows="2" placeholder="Any notes or questions..."></textarea>
+      <button class="submit-btn" onclick="submitLead()"><i class="ti ti-send"></i> Submit - we'll follow up within 24h</button>
+    </div>`;
+}
+function submitLead(){
+  const name=document.getElementById('ln').value.trim()||'there';
+  document.getElementById('action-area').innerHTML='';
+  const msg='Thank you, '+name+'! Your details are saved and our team will reach out within 24 hours. Is there anything else I can help you with?';
+  addAI(msg);speak(msg);
+  showQuick(['Yes, I have another question',"No, that's all - thank you!"]);
+}
+
+// ── Contact modal ──────────────────────────────────────────────────────────────
+function openContactModal(){document.getElementById('contact-modal').classList.add('open');}
+function closeContactModal(){document.getElementById('contact-modal').classList.remove('open');}
+async function submitContact(){
+  const name=document.getElementById('cm-name').value.trim();
+  const phone=document.getElementById('cm-phone').value.trim();
+  const email=document.getElementById('cm-email').value.trim();
+  const inquiry=document.getElementById('cm-inquiry').value.trim();
+  if(!name||!email||!inquiry){alert('Please fill in name, email, and inquiry.');return;}
+  const btn=document.querySelector('#contact-modal .submit-btn');btn.disabled=true;btn.innerHTML='Sending...';
+  try{
+    await fetch('/contact',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,phone,email,inquiry})});
+    closeContactModal();
+    const msg='Thank you, '+name+'! Your inquiry has been received and a human agent will contact you at '+email+' as soon as possible. Is there anything else I can help you with?';
+    addAI(msg);speak(msg);
+    showQuick(['Yes, I have a question',"No, that's all - thanks!"]);
+  }catch(err){alert('Something went wrong. Please try again.');}
+  btn.disabled=false;btn.innerHTML='<i class="ti ti-send"></i> Submit Inquiry';
+}
+
+// ── Success screen ─────────────────────────────────────────────────────────────
+function showSuccess(title,msg,refId,email,sub){
+  document.getElementById('agent-view').style.display='none';
+  document.getElementById('success-view').style.display='block';
+  document.getElementById('success-title').textContent=title;
+  document.getElementById('success-msg').textContent=msg;
+  document.getElementById('success-ref-id').textContent=refId;
+  document.getElementById('success-email').textContent=email;
+  document.getElementById('success-sub').textContent=sub;
+}
+initCookieBanner();
+</script>
+</body>
+</html>

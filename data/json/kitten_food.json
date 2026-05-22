@@ -1,0 +1,20 @@
+[
+  {
+    "name": "Royal Canin Kitten Dry Food 2kg",
+    "price": 32.99,
+    "type": "dry",
+    "sku": "CAT005"
+  },
+  {
+    "name": "Hills Science Diet Kitten 1.6kg",
+    "price": 28.99,
+    "type": "dry",
+    "sku": "CAT003"
+  },
+  {
+    "name": "Whiskas Kitten Wet Food 12-pack",
+    "price": 16.99,
+    "type": "wet",
+    "sku": null
+  }
+]
