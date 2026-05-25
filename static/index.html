@@ -240,6 +240,7 @@ function initCookieBanner(){
   }
 }
 let pendingOrderItem='', pendingOrderPrice=0, pendingOrderMethod='delivery', pendingAddons=[];
+let pendingCheckout=null; // stores last checkout/appt params for re-showing after questions
 
 const FLOW_LABELS={
   'buy-pet':'Pet Purchase AI',
@@ -499,6 +500,31 @@ function sendMsg(){
   handle(text);
 }
 async function handle(text){
+  // "Ready to checkout" — re-show last form, no AI call needed
+  if((text==='Ready to checkout'||text==='Ready to complete my purchase')&&pendingCheckout){
+    addUser(text);
+    const reShowMsg='Of course! Here is the form again.';
+    addAI(reShowMsg);speak(reShowMsg);
+    const p=pendingCheckout;
+    if(p.type==='pet')showCheckout(p.item,p.price,p.method);
+    else if(p.type==='product')showProductCheckout(p.item,p.price,p.method);
+    else if(p.type==='appt')showAppointmentForm();
+    return;
+  }
+  // Goodbye — end conversation gracefully without AI call
+  const goodbyePhrases=["No thanks, I'm done","No, I'm all set - thank you!","No, that's all - thank you!","No, that's all - thanks!"];
+  if(goodbyePhrases.includes(text)){
+    addUser(text);
+    pendingCheckout=null;
+    const byes=["Thank you for visiting Happy Paws! Have a wonderful day!",
+                "It was a pleasure helping you today. Have a great day!",
+                "Thanks for chatting with us at Happy Paws — hope to see you soon!"];
+    const bye=byes[Math.floor(Math.random()*byes.length)];
+    addAI(bye);speak(bye);
+    document.getElementById('quick-area').innerHTML='';
+    document.getElementById('action-area').innerHTML='';
+    return;
+  }
   addUser(text);
   history.push({role:'user',content:text});
   isLoading=true;
@@ -525,8 +551,11 @@ async function handle(text){
     if(!reply.includes('[ACTION:')&&currentFlow==='buy-pet'&&(lower.includes('delivery')||lower.includes('pick up')||lower.includes('in person'))){
       showQuick(['Home delivery','In-store pickup','Visit in person first']);
     }
-    if(!reply.includes('[ACTION:')&&(lower.includes('further question')||lower.includes('anything else')||lower.includes('help you with'))){
-      showQuick(['Yes, I have a question',"No, I'm all set - thank you!"]);
+    // If pendingCheckout exists, always show checkout button after every AI reply
+    if(!reply.includes('[ACTION:')&&pendingCheckout){
+      showQuick(['Ready to checkout','I have another question',"No thanks, I'm done"]);
+    } else if(!reply.includes('[ACTION:')&&(lower.includes('further question')||lower.includes('anything else')||lower.includes('help you with'))){
+      showQuick(['Yes, I have a question',"No thanks, I'm done"]);
     }
   }catch(err){
     removeTyping();
@@ -541,12 +570,23 @@ function checkAction(text){
   const area=document.getElementById('action-area');area.innerHTML='';
   // Pet checkout
   const co=text.match(/\[ACTION:CHECKOUT\|([^|]+)\|([^|]+)\|([^\]]+)\]/);
-  if(co){const price=safeNum(co[2]);showCheckout(co[1],price,co[3]);return;}
+  if(co){
+    const price=safeNum(co[2]);
+    pendingCheckout={type:'pet',item:co[1],price,method:co[3]};
+    showCheckout(co[1],price,co[3]);return;
+  }
   // Product order
   const po=text.match(/\[ACTION:PRODUCT_ORDER\|([^|]+)\|([^|]+)\|([^\]]+)\]/);
-  if(po){const price=safeNum(po[2]);showProductCheckout(po[1],price,po[3]);return;}
+  if(po){
+    const price=safeNum(po[2]);
+    pendingCheckout={type:'product',item:po[1],price,method:po[3]};
+    showProductCheckout(po[1],price,po[3]);return;
+  }
   // Appointment form
-  if(text.includes('[ACTION:SHOW_APPT_FORM]')||text.includes('[ACTION:BOOK_APPOINTMENT]')){showAppointmentForm();return;}
+  if(text.includes('[ACTION:SHOW_APPT_FORM]')||text.includes('[ACTION:BOOK_APPOINTMENT]')){
+    pendingCheckout={type:'appt'};
+    showAppointmentForm();return;
+  }
   // Contact form (modal)
   if(text.includes('[ACTION:CONTACT_FORM]')){openContactModal();return;}
   // Lead form
@@ -683,6 +723,14 @@ async function submitAppointment(){
     const storeShort=store.split(' - ')[0];
     showSuccess('Appointment Confirmed!','Your appointment ID is:',data.appt_id,email,storeShort+' on '+date+' at '+time+'. Please arrive 5 minutes early!');
     speak('Your appointment is confirmed! We look forward to seeing you at Happy Paws!');
+    // After showing success, come back to chat and ask if they have more questions
+    setTimeout(()=>{
+      document.getElementById('success-view').style.display='none';
+      document.getElementById('agent-view').style.display='block';
+      const msg='Your appointment is all set! Do you have any other questions, or is there anything else I can help you with?';
+      addAI(msg);speak(msg);
+      showQuick(['Ready to checkout','I have another question',"No thanks, I'm done"]);
+    },3000);
   }catch(err){
     errEl.style.display='flex';errMsg.textContent='Something went wrong. Please try again.';
     btn.disabled=false;btn.innerHTML='<i class="ti ti-check"></i> Confirm Appointment';
@@ -788,22 +836,53 @@ async function submitOrder(item,itemPrice,method,isPet){
       :'Estimated delivery: 3-5 business days. Our staff will call you before the pet is delivered.';
     showSuccess('Order Confirmed!','Your order ID is:',data.order_id,email,sub);
     speak('Order confirmed! Your order ID is '+data.order_id+'. A confirmation email has been sent to you.');
+    pendingCheckout=null;
+    setTimeout(()=>{
+      document.getElementById('success-view').style.display='none';
+      document.getElementById('agent-view').style.display='block';
+      const msg='Your order is confirmed! Is there anything else I can help you with today?';
+      addAI(msg);speak(msg);
+      showQuick(['Yes, I have a question',"No thanks, I'm done"]);
+    },3000);
   }catch(err){alert('Something went wrong. Please try again.');btn.disabled=false;btn.innerHTML='<i class="ti ti-lock"></i> Confirm & Pay';}
 }
 
 // ── Product checkout ───────────────────────────────────────────────────────────
+// Parse multi-item product strings like "Royal Canin x1 + Whiskas x2|18.99"
+// or plain "Royal Canin Kitten Dry Food x2" with a single total price
+function parseProductItems(productStr, totalPrice){
+  // Try splitting on " + " to get individual items
+  const parts = productStr.split(/\s*\+\s*/);
+  if(parts.length > 1){
+    // Multiple items — distribute price proportionally if no individual prices given
+    // Just show each item name; use total for the summary row
+    return parts.map(p=>({name:p.trim(), price:null}));
+  }
+  return [{name:productStr.trim(), price:totalPrice}];
+}
+
+function buildProductItemRows(productStr, totalPrice){
+  const items = parseProductItems(productStr, totalPrice);
+  if(items.length===1) return '<tr><td>'+items[0].name+'</td><td style="text-align:right">$'+fmt2(totalPrice)+'</td></tr>';
+  // Multiple items — show each name, subtotal at bottom
+  let rows = items.map(i=>'<tr><td style="color:#444">'+i.name+'</td><td style="text-align:right">—</td></tr>').join('');
+  rows += '<tr><td style="color:#6b6b6b;padding-top:4px">Subtotal</td><td style="text-align:right;padding-top:4px">$'+fmt2(totalPrice)+'</td></tr>';
+  return rows;
+}
+
 function showProductCheckout(product,price,method){
   const ip=safeNum(price);
   const isPickup=method==='pickup';
   const{tax,fee,total}=calcOrder(ip,[],method,false,true);
+  const itemRows=buildProductItemRows(product,ip);
   document.getElementById('action-area').innerHTML=`
     <div class="action-card">
       <h3><i class="ti ti-shopping-bag"></i> ${isPickup?'Pickup & Purchase':'Online Order & Delivery'}</h3>
       <div class="mock-badge"><i class="ti ti-info-circle"></i> Demo mode - no real payment charged</div>
       <div class="order-summary-box" id="prod-summary">
-        <div class="item-name">${product}</div>
+        <div class="item-name">Order Summary</div>
         <table width="100%" style="font-size:13px" id="prod-summary-table">
-          <tr><td>${product}</td><td style="text-align:right">$${fmt2(ip)}</td></tr>
+          ${itemRows}
           <tr><td style="color:#6b6b6b">Tax (HST 13%)</td><td style="text-align:right">$${fmt2(tax)}</td></tr>
           <tr><td style="color:#6b6b6b">Delivery Fee</td><td style="text-align:right">${fee===0?'FREE':'$'+fmt2(fee)}</td></tr>
           <tr style="border-top:1px solid rgba(83,74,183,0.2)"><td style="padding-top:8px;font-weight:700;color:#534AB7">Total</td><td style="padding-top:8px;font-weight:700;color:#534AB7;text-align:right">$${fmt2(total)}</td></tr>
@@ -876,6 +955,14 @@ async function submitProductOrder(product,itemPrice,method){
       :'Estimated delivery: 1-3 business days to '+address+'.';
     showSuccess('Order Confirmed!','Your order ID is:',data.order_id,email,sub);
     speak('Order confirmed! Your order ID is '+data.order_id+'. A confirmation email has been sent.');
+    pendingCheckout=null;
+    setTimeout(()=>{
+      document.getElementById('success-view').style.display='none';
+      document.getElementById('agent-view').style.display='block';
+      const msg='Your order is confirmed! Is there anything else I can help you with?';
+      addAI(msg);speak(msg);
+      showQuick(['Yes, I have a question',"No thanks, I'm done"]);
+    },3000);
   }catch(err){alert('Something went wrong. Please try again.');btn.disabled=false;btn.innerHTML='<i class="ti ti-lock"></i> Confirm Order';}
 }
 
