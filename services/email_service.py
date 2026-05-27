@@ -1,13 +1,16 @@
 """
 services/email_service.py
 All email sending logic lives here.
-To switch from Gmail to SendGrid or another provider,
-only this file needs to change.
+Now using Resend API instead of Gmail SMTP.
 """
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
-from config import GMAIL_SENDER, GMAIL_APP_PASSWORD, STORE_EMAIL
+import os
+import urllib.request
+import urllib.error
+import json
+from config import STORE_EMAIL
+
+RESEND_API_KEY = os.getenv("RESEND_API_KEY", "").strip()
+SENDER = "Happy Paws Pet Store <onboarding@resend.dev>"
 
 BRAND_PURPLE = "#534AB7"
 BRAND_LIGHT  = "#EEEDFE"
@@ -29,20 +32,32 @@ def _base_layout(header_title: str, header_sub: str, body_html: str) -> str:
 
 
 def send(to_addr: str, subject: str, html_body: str) -> str:
-    """Send an HTML email to the customer and a copy to the store."""
+    """Send an HTML email via Resend API."""
     try:
-        server = smtplib.SMTP_SSL("smtp.gmail.com", 465)
-        server.login(GMAIL_SENDER, GMAIL_APP_PASSWORD)
         recipients = list({to_addr, STORE_EMAIL} - {""})
         for recipient in recipients:
-            msg = MIMEMultipart("alternative")
-            msg["Subject"] = subject
-            msg["From"]    = f"Happy Paws Pet Store <{GMAIL_SENDER}>"
-            msg["To"]      = recipient
-            msg.attach(MIMEText(html_body, "html"))
-            server.sendmail(GMAIL_SENDER, recipient, msg.as_string())
-        server.quit()
+            payload = json.dumps({
+                "from": SENDER,
+                "to": [recipient],
+                "subject": subject,
+                "html": html_body,
+            }).encode("utf-8")
+
+            req = urllib.request.Request(
+                "https://api.resend.com/emails",
+                data=payload,
+                headers={
+                    "Authorization": f"Bearer {RESEND_API_KEY}",
+                    "Content-Type": "application/json",
+                },
+                method="POST",
+            )
+            with urllib.request.urlopen(req) as resp:
+                resp.read()
         return "sent"
+    except urllib.error.HTTPError as e:
+        body = e.read().decode()
+        return f"failed: HTTP {e.code} - {body}"
     except Exception as exc:
         return f"failed: {exc}"
 
@@ -130,7 +145,7 @@ def send_inquiry_notification(name: str, email: str, phone: str, inquiry: str) -
     <h2 style="color:{BRAND_PURPLE}">New Customer Inquiry</h2>
     <table style="font-size:14px;width:100%">
       <tr><td style="color:#6b6b6b;padding:6px 0;width:120px">Name</td><td>{name}</td></tr>
-      <tr><td style="color:#6b6b6b;padding:6px 0">Email</td><td>{email}</td></tr>
+      <tr><td style="color:#6b6b6b;padding:6b 0">Email</td><td>{email}</td></tr>
       <tr><td style="color:#6b6b6b;padding:6px 0">Phone</td><td>{phone}</td></tr>
       <tr><td style="color:#6b6b6b;padding:6px 0;vertical-align:top">Inquiry</td><td>{inquiry}</td></tr>
     </table>"""
