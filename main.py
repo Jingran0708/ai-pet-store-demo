@@ -38,3 +38,14 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 @app.get("/")
 def index():
     return FileResponse("static/index.html")
+
+# ── Test email ─────────────────────────────────────────────────────────────────
+@app.get("/test-email")
+def test_email():
+    from services.email_service import send
+    result = send(
+        to_addr="jingran0708@gmail.com",  # 改成你自己的邮箱
+        subject="Test Email from Happy Paws",
+        html_body="<p>This is a test email from Render. If you see this, email is working!</p>"
+    )
+    return {"result": result}

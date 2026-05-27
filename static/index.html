@@ -53,6 +53,9 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(
 .mic-btn.active{background:#fff5f5;border-color:#e53e3e;color:#e53e3e;animation:pulse 1s infinite;}
 @keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.08)}}
 .voice-status{text-align:center;font-size:12px;color:#e53e3e;margin-bottom:6px;min-height:18px;}
+.voice-diag{background:#1a1a1a;color:#e0e0e0;border-radius:10px;padding:14px;font-size:12px;font-family:monospace;margin-bottom:10px;line-height:1.8;display:none;}
+.voice-diag .ok{color:#4ade80;}.voice-diag .warn{color:#facc15;}.voice-diag .err{color:#f87171;}
+.voice-diag-btn{font-size:11px;padding:3px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--muted);cursor:pointer;margin-left:8px;}
 .typing span{width:7px;height:7px;border-radius:50%;background:var(--muted);display:inline-block;animation:bounce 1s infinite;margin:0 2px;}
 .typing span:nth-child(2){animation-delay:.15s}.typing span:nth-child(3){animation-delay:.3s}
 @keyframes bounce{0%,80%,100%{transform:translateY(0)}40%{transform:translateY(-7px)}}
@@ -167,12 +170,13 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(
 <div id="agent-view">
   <div class="top-bar">
     <button class="back-btn" onclick="goBack()"><i class="ti ti-arrow-left"></i> Back</button>
-    <div class="status"><div class="dot"></div><span id="agent-label">AI Agent</span></div>
+    <div class="status"><div class="dot"></div><span id="agent-label">AI Agent</span><button class="voice-diag-btn" onclick="runVoiceDiag()">Voice check</button></div>
   </div>
   <div class="chat-area" id="chat-area"></div>
   <div id="quick-area" class="quick-btns"></div>
   <div id="action-area"></div>
   <div class="voice-status" id="voice-status"></div>
+  <div id="voice-diag" class="voice-diag"></div>
   <div class="input-row">
     <input id="user-input" type="text" placeholder="Type your message or use mic..." onkeydown="if(event.key==='Enter')sendMsg()"/>
     <button class="mic-btn" id="mic-btn" onclick="toggleVoice()"><i class="ti ti-microphone"></i> <span id="mic-label">Voice</span></button>
@@ -281,6 +285,53 @@ if(SpeechRecognition){
   };
 }
 function startListening(){if(!recognition||isSpeaking)return;try{document.getElementById('user-input').value='';recognition.start();}catch(e){}}
+function runVoiceDiag(){
+  const panel=document.getElementById('voice-diag');
+  panel.style.display='block';
+  const lines=[];
+  const ok=(s)=>'<span class="ok">✓ '+s+'</span>';
+  const warn=(s)=>'<span class="warn">⚠ '+s+'</span>';
+  const err=(s)=>'<span class="err">✗ '+s+'</span>';
+  // Browser
+  const isChrome=navigator.userAgent.includes('Chrome')&&!navigator.userAgent.includes('Edg');
+  const isSafari=navigator.userAgent.includes('Safari')&&!navigator.userAgent.includes('Chrome');
+  const isFirefox=navigator.userAgent.includes('Firefox');
+  lines.push('<b>Browser</b>');
+  if(isChrome)lines.push(ok('Chrome detected — full voice support'));
+  else if(isSafari)lines.push(warn('Safari — TTS only, mic recognition may not work'));
+  else if(isFirefox)lines.push(err('Firefox — voice not supported, please use Chrome'));
+  else lines.push(warn('Unknown browser — voice support uncertain'));
+  // Speech Recognition
+  lines.push('<b>Microphone (Speech Recognition)</b>');
+  if(window.SpeechRecognition||window.webkitSpeechRecognition)lines.push(ok('SpeechRecognition API available'));
+  else lines.push(err('SpeechRecognition API not found — use Chrome'));
+  if(recognition)lines.push(ok('Recognition object initialised'));
+  else lines.push(err('Recognition object is null'));
+  // HTTPS / localhost check
+  const isSecure=location.protocol==='https:'||location.hostname==='localhost'||location.hostname==='127.0.0.1';
+  if(isSecure)lines.push(ok('Secure context ('+location.protocol+'//'+location.hostname+') — mic allowed'));
+  else lines.push(err('Not a secure context — mic blocked by browser. Must use localhost or https://'));
+  // Speech Synthesis
+  lines.push('<b>Text-to-Speech (Speech Synthesis)</b>');
+  if(window.speechSynthesis)lines.push(ok('SpeechSynthesis API available'));
+  else lines.push(err('SpeechSynthesis API not found'));
+  const voices=window.speechSynthesis?window.speechSynthesis.getVoices():[];
+  if(voices.length>0){
+    lines.push(ok(voices.length+' voices loaded'));
+    const best=getBestVoice();
+    if(best)lines.push(ok('Preferred voice found: '+best.name));
+    else lines.push(warn('No preferred voice — will use browser default'));
+  } else {
+    lines.push(warn('No voices loaded yet (may load after first interaction)'));
+  }
+  // Current state
+  lines.push('<b>Current State</b>');
+  lines.push((voiceModeActive?ok:warn)('Voice mode: '+(voiceModeActive?'ON':'OFF')));
+  lines.push((isSpeaking?warn:ok)('Speaking: '+(isSpeaking?'YES (may block mic)':'NO')));
+  lines.push('<button onclick="document.getElementById(\'voice-diag\').style.display=\'none\' style="margin-top:6px;padding:3px 10px;border-radius:5px;border:1px solid #555;background:#333;color:#eee;cursor:pointer;font-size:11px">Close</button>');
+  panel.innerHTML=lines.join('<br>');
+}
+
 function toggleVoice(){
   if(!recognition){alert('Voice input is not supported. Please use Chrome.');return;}
   voiceModeActive=!voiceModeActive;
@@ -377,6 +428,7 @@ async function startAgent(flow){
     try{
       const check=await fetch('/session/'+savedId);
       if(check.ok){
+        // Session still alive on server — restore it
         sessionId=savedId;
         const data=await check.json();
         currentStage=data.stage||'greeting';
@@ -384,8 +436,14 @@ async function startAgent(flow){
         addAI(starter);speak(starter);
         showQuick(['Continue our conversation','Start a new conversation']);
         return;
+      } else {
+        // Session expired or server restarted (404/500) — clear stale cookie and start fresh
+        deleteCookie('hp_session_'+flow);
       }
-    }catch(e){}
+    }catch(e){
+      // Network error — clear cookie and start fresh
+      deleteCookie('hp_session_'+flow);
+    }
   }
   // No valid saved session — create a new one
   sessionId=null;
@@ -974,7 +1032,7 @@ function showLeadForm(){
       <div class="field-row"><input id="ln" placeholder="Your name"/><input id="lp" placeholder="Phone number"/></div>
       <input class="field-full" id="le" type="email" placeholder="Email address"/>
       <textarea class="field-full" id="lnotes" rows="2" placeholder="Any notes or questions..."></textarea>
-      <button class="submit-btn" onclick="submitLead()"><i class="ti ti-send"></i> Submit - we'll follow up within 24h</button>
+      <button class="submit-btn" onclick="submitLead()"><i class="ti ti-send"></i> Submit - we will follow up within 24h</button>
     </div>`;
 }
 function submitLead(){
