@@ -15,6 +15,7 @@ from routers.appointments import router as appointments_router
 from routers.orders       import router as orders_router
 from routers.contact      import router as contact_router
 from routers.sessions     import router as sessions_router
+from routers.phone        import router as phone_router
 
 app = FastAPI(title="Happy Paws AI Support Platform", version="2.0")
 
@@ -31,6 +32,7 @@ app.include_router(appointments_router)
 app.include_router(orders_router)
 app.include_router(contact_router)
 app.include_router(sessions_router)
+app.include_router(phone_router)
 
 # ── Serve frontend ─────────────────────────────────────────────────────────────
 app.mount("/static", StaticFiles(directory="static"), name="static")
