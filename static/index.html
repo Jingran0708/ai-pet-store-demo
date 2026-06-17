@@ -153,15 +153,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(
     </div>
     <div class="choice-card" onclick="startAgent('appointment')">
       <div class="icon"><i class="ti ti-calendar"></i></div>
-      <div><div class="label">Book Appointment / Inquiries</div><div class="sub">Visit a store, see a specific pet, or get help with questions.</div></div>
-    </div>
-    <div class="choice-card" onclick="startAgent('products')">
-      <div class="icon"><i class="ti ti-shopping-cart"></i></div>
-      <div><div class="label">Pet Product Inquiry</div><div class="sub">Find food and supplies. Check stock and place orders.</div></div>
-    </div>
-    <div class="choice-card" onclick="startAgent('diagnose')">
-      <div class="icon"><i class="ti ti-stethoscope"></i></div>
-      <div><div class="label">After-Sales Support</div><div class="sub">Support for pets purchased from Happy Paws stores.</div></div>
+      <div><div class="label">Appointments &amp; Support</div><div class="sub">Book a visit, ask about products, or get after-sales help — all in one chat.</div></div>
     </div>
   </div>
 </div>
@@ -248,21 +240,15 @@ let pendingCheckout=null; // stores last checkout/appt params for re-showing aft
 
 const FLOW_LABELS={
   'buy-pet':'Pet Purchase AI',
-  'appointment':'Appointment & Inquiries',
-  'products':'Pet Products Advisor',
-  'diagnose':'After-Sales Support'
+  'appointment':'Appointments & Support'
 };
 const FLOW_STARTERS={
   'buy-pet':"Hi there! Welcome to Happy Paws. I'm here to help you find your perfect furry companion. Are you thinking about a cat or a dog today?",
-  'appointment':"Hello! Welcome to Happy Paws. I can help you book an appointment or answer any questions. What brings you in today?",
-  'products':"Hi! Welcome to Happy Paws. I can help you find pet food and supplies, check availability, and place orders. What are you looking for? You can also browse our full range at www.happypaws-shop.ca",
-  'diagnose':"Hello! I'm here to help with after-sales support for pets purchased from Happy Paws. Was the pet you need help with purchased from one of our stores?"
+  'appointment':"Hello! Welcome to Happy Paws. I can help you book an appointment, answer product questions, or assist with after-sales support. What brings you in today?"
 };
 const FLOW_QUICK={
   'buy-pet':['Cat','Dog'],
-  'appointment':['See a specific pet','Browse products in-store','After-sales support','Other inquiry'],
-  'products':['Cat food','Dog food','Check stock','Where to buy online'],
-  'diagnose':['Yes, from Happy Paws','No, from elsewhere']
+  'appointment':['See a specific pet','Ask about a product','After-sales support','Other inquiry']
 };
 
 // ── Voice ──────────────────────────────────────────────────────────────────────
