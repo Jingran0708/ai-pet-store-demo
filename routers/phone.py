@@ -28,18 +28,23 @@ router = APIRouter()
 
 # Map Twilio's CallSid -> our internal session_id, so each call keeps its own state
 CALL_SESSIONS: dict = {}
+# Map Twilio's CallSid -> the last thing we said, so a silent/unclear response can be re-asked naturally
+LAST_PROMPT: dict = {}
+NOINPUT_COUNT: dict = {}
 
 
-def _twiml(say_text: str, gather: bool = True, hangup: bool = False) -> Response:
+def _twiml(say_text: str, call_sid: str = "", gather: bool = True, hangup: bool = False) -> Response:
     """Build a TwiML response. gather=True listens for speech next."""
     safe_text = say_text.replace("&", "and")
+    if gather and call_sid:
+        LAST_PROMPT[call_sid] = safe_text
     if gather:
         body = f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-    <Gather input="speech" action="/voice/respond" method="POST" speechTimeout="auto" language="en-US">
+    <Gather input="speech" action="/voice/respond" method="POST" speechTimeout="3" timeout="8" actionOnEmptyResult="true" language="en-US">
         <Say voice="Polly.Joanna">{safe_text}</Say>
     </Gather>
-    <Say voice="Polly.Joanna">Sorry, I didn't catch that. Goodbye for now!</Say>
+    <Redirect method="POST">/voice/respond</Redirect>
 </Response>"""
     else:
         body = f"""<?xml version="1.0" encoding="UTF-8"?>
@@ -63,7 +68,30 @@ async def voice_incoming(request: Request):
         "Hi there, thanks for calling Happy Paws Pets! "
         "Can I start with your name?"
     )
-    return _twiml(greeting)
+    return _twiml(greeting, call_sid=call_sid)
+
+
+@router.post("/voice/noinput")
+async def voice_noinput(request: Request):
+    """Called when <Gather> times out with no speech detected at all."""
+    form = await request.form()
+    call_sid = form.get("CallSid", "")
+
+    count = NOINPUT_COUNT.get(call_sid, 0) + 1
+    NOINPUT_COUNT[call_sid] = count
+
+    if count >= 3:
+        return _twiml(
+            "I'm having trouble hearing you, so I'll let you go for now — please feel free to call back. Goodbye!",
+            gather=False, hangup=True,
+        )
+
+    last_question = LAST_PROMPT.get(call_sid, "Could you tell me how I can help you today?")
+    state = sess.get_session(CALL_SESSIONS.get(call_sid, ""))
+    name = state["collected"].get("customer_name") if state else None
+    prefix = f"Sorry {name}, I didn't catch that — " if name else "Sorry, I didn't catch that — "
+
+    return _twiml(f"{prefix}{last_question}", call_sid=call_sid)
 
 
 @router.post("/voice/respond")
@@ -82,7 +110,13 @@ async def voice_respond(request: Request):
         session_id = state["session_id"]
 
     if not user_text:
-        return _twiml("Sorry, I didn't catch that — could you say that again?")
+        last_question = LAST_PROMPT.get(call_sid, "Could you tell me how I can help you today?")
+        state = sess.get_session(session_id)
+        name = state["collected"].get("customer_name") if state else None
+        prefix = f"Sorry {name}, I didn't catch that clearly — " if name else "Sorry, I didn't catch that clearly — "
+        return _twiml(f"{prefix}can you say that again?", call_sid=call_sid)
+
+    NOINPUT_COUNT[call_sid] = 0
 
     # Capture name/pet/phone/email from this turn BEFORE building the prompt,
     # so the AI immediately knows what's already been collected.
@@ -107,33 +141,43 @@ async def voice_respond(request: Request):
     sess.extract_state_from_reply(session_id, user_text, reply)
 
     booking_ready = "[ACTION:PHONE_BOOK_READY" in reply
-    parsed_date, parsed_time = _parse_booking_tag(reply)
+    parsed_store, parsed_date, parsed_time = _parse_booking_tag(reply)
     spoken_reply = re.sub(r"\[ACTION:PHONE_BOOK_READY.*?\]", "", reply).strip()
+
+    # Lock in store/date/time as soon as the AI states them clearly in a confirmation sentence,
+    # so they're never re-asked even before the final booking tag appears.
+    _lock_in_confirmed_fields(session_id, spoken_reply, parsed_store, parsed_date, parsed_time)
 
     is_closing = "goodbye" in spoken_reply.lower() and not booking_ready
 
     if booking_ready:
-        confirmation_line = _attempt_booking(session_id, parsed_date, parsed_time, caller_number)
+        confirmed = sess.get_session(session_id)["collected"] if sess.get_session(session_id) else {}
+        final_store = parsed_store or confirmed.get("confirmed_store")
+        final_date = parsed_date or confirmed.get("confirmed_date")
+        final_time = parsed_time or confirmed.get("confirmed_time")
+        confirmation_line = _attempt_booking(session_id, final_store, final_date, final_time, caller_number)
         final_text = f"{spoken_reply} {confirmation_line}"
-        return _twiml(final_text, gather=False, hangup=True)
+        return _twiml(final_text, call_sid=call_sid, gather=False, hangup=True)
 
     if is_closing:
-        return _twiml(spoken_reply, gather=False, hangup=True)
+        return _twiml(spoken_reply, call_sid=call_sid, gather=False, hangup=True)
 
-    return _twiml(spoken_reply)
+    return _twiml(spoken_reply, call_sid=call_sid)
 
 
 def _parse_booking_tag(reply: str):
-    """Extract date=YYYY-MM-DD and time=HH:MM AM/PM from the action tag."""
-    date_match = re.search(r"date=(\d{4}-\d{2}-\d{2})", reply)
-    time_match = re.search(r"time=(\d{2}:\d{2}\s?[APap][Mm])", reply)
+    """Extract store=NAME, date=YYYY-MM-DD, and time=HH:MM AM/PM from the action tag."""
+    store_match = re.search(r"store=([^,\]]+?)(?:\s+date=|\s*\])", reply)
+    date_match  = re.search(r"date=(\d{4}-\d{2}-\d{2})", reply)
+    time_match  = re.search(r"time=(\d{2}:\d{2}\s?[APap][Mm])", reply)
+    store = store_match.group(1).strip() if store_match else None
     date = date_match.group(1) if date_match else None
     if time_match:
         raw = time_match.group(1).upper().replace("AM", " AM").replace("PM", " PM")
         time = re.sub(r"\s+", " ", raw).strip()
     else:
         time = None
-    return date, time
+    return store, date, time
 
 
 def _extract_phone_fields(session_id: str, user_text: str) -> None:
@@ -171,6 +215,48 @@ def _extract_phone_fields(session_id: str, user_text: str) -> None:
                 sess.update_session(session_id, {"collected.pet_name": cleaned})
 
 
+def _match_store(text: str) -> str:
+    """Find which known store name is mentioned in a piece of text, if any."""
+    text_lower = text.lower()
+    for s in STORES:
+        short_name = s["name"].split(" - ")[0].strip()
+        # match on the distinguishing part of the name (e.g. "Downtown", "Midtown", "East End")
+        distinguishing = short_name.replace("Happy Paws", "").strip()
+        if distinguishing and distinguishing.lower() in text_lower:
+            return s["name"]
+        if short_name.lower() in text_lower:
+            return s["name"]
+    return ""
+
+
+def _lock_in_confirmed_fields(session_id: str, spoken_reply: str, parsed_store: str, parsed_date: str, parsed_time: str) -> None:
+    """
+    Once the AI's reply contains a clear confirmation sentence mentioning store/date/time,
+    save them to session state so they're never re-asked, even on turns before the final booking tag.
+    """
+    state = sess.get_session(session_id)
+    if not state:
+        return
+    c = state["collected"]
+    lower = spoken_reply.lower()
+    looks_like_confirmation = any(
+        phrase in lower for phrase in ["just to confirm", "to confirm", "does that work", "is that correct"]
+    )
+
+    if not looks_like_confirmation and not parsed_store:
+        return
+
+    if not c.get("confirmed_store"):
+        store = parsed_store or _match_store(spoken_reply)
+        if store:
+            sess.update_session(session_id, {"collected.confirmed_store": store})
+
+    if parsed_date and not c.get("confirmed_date"):
+        sess.update_session(session_id, {"collected.confirmed_date": parsed_date})
+    if parsed_time and not c.get("confirmed_time"):
+        sess.update_session(session_id, {"collected.confirmed_time": parsed_time})
+
+
 def _build_known_summary(session_id: str) -> str:
     """Explicit reminder string for the AI of exactly what's already known, to stop re-asking."""
     state = sess.get_session(session_id)
@@ -182,6 +268,12 @@ def _build_known_summary(session_id: str) -> str:
         lines.append(f"- Caller's name: {c['customer_name']}")
     if c.get("pet_name"):
         lines.append(f"- Pet's name: {c['pet_name']}")
+    if c.get("confirmed_store"):
+        lines.append(f"- CONFIRMED store: {c['confirmed_store']} (do not ask again)")
+    if c.get("confirmed_date"):
+        lines.append(f"- CONFIRMED date: {c['confirmed_date']} (do not ask again)")
+    if c.get("confirmed_time"):
+        lines.append(f"- CONFIRMED time: {c['confirmed_time']} (do not ask again)")
     if c.get("customer_email"):
         lines.append(f"- Email: {c['customer_email']}")
     if c.get("customer_phone"):
@@ -191,7 +283,7 @@ def _build_known_summary(session_id: str) -> str:
     return "\n".join(lines)
 
 
-def _attempt_booking(session_id: str, date: str, time: str, caller_number: str) -> str:
+def _attempt_booking(session_id: str, store: str, date: str, time: str, caller_number: str) -> str:
     """
     Book the appointment, text the customer, and email the store.
     Returns a spoken confirmation line for the call.
@@ -204,7 +296,7 @@ def _attempt_booking(session_id: str, date: str, time: str, caller_number: str) 
     name     = c.get("customer_name") or "Guest"
     pet_name = c.get("pet_name") or ""
     phone    = c.get("customer_phone") or caller_number or ""
-    store    = STORES[0]["name"] if STORES else "Happy Paws"
+    store    = store or c.get("confirmed_store") or (STORES[0]["name"] if STORES else "Happy Paws")
     base_reason = c.get("visit_reason") or "General visit"
     reason = f"{base_reason} (Pet: {pet_name})" if pet_name else base_reason
 
