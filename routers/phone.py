@@ -134,7 +134,7 @@ async def voice_respond(request: Request):
     full_prompt = base_prompt + context_note
 
     try:
-        raw_reply = await ai_chat(full_prompt, call["history"])
+        raw_reply = await ai_chat(full_prompt, call["history"], json_mode=True)
     except RuntimeError:
         return _twiml(
             "I'm having trouble connecting right now. Please call back in a moment, or visit our website. Goodbye!",
@@ -146,8 +146,7 @@ async def voice_respond(request: Request):
     parsed = _parse_ai_json(raw_reply)
 
     if parsed is None:
-        # AI broke format. Retry once with an explicit correction instruction instead of
-        # silently falling back to plain text (which is what was causing bookings to never fire).
+        # Should be rare now that json_mode is enforced server-side, but keep one retry as a safety net.
         print(f"[PHONE DEBUG] call_sid={call_sid} FAILED TO PARSE JSON — retrying with correction")
         retry_prompt = full_prompt + (
             "\n\nYOUR PREVIOUS RESPONSE WAS REJECTED because it was not valid JSON. "
@@ -156,7 +155,7 @@ async def voice_respond(request: Request):
             "format described above. No exceptions."
         )
         try:
-            raw_reply_retry = await ai_chat(retry_prompt, call["history"])
+            raw_reply_retry = await ai_chat(retry_prompt, call["history"], json_mode=True)
             print(f"[PHONE DEBUG] call_sid={call_sid} retry_raw_ai_reply={raw_reply_retry!r}")
             parsed = _parse_ai_json(raw_reply_retry)
         except RuntimeError:
