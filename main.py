@@ -51,3 +51,12 @@ def test_email():
         html_body="<p>This is a test email from Render. If you see this, email is working!</p>"
     )
     return {"result": result}
+# ── Test SMS ───────────────────────────────────────────────────────────────────
+@app.get("/test-sms")
+def test_sms():
+    from services.sms_service import send_sms
+    result = send_sms(
+        to_number="+16477943974",  # 改成你想测试接收短信的号码（必须是已验证的号码）
+        body="Test SMS from Happy Paws via Render. If you see this, SMS is working!"
+    )
+    return {"result": result}

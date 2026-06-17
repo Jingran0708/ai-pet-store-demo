@@ -141,10 +141,13 @@ async def voice_respond(request: Request):
             gather=False, hangup=True,
         )
 
+    print(f"[PHONE DEBUG] call_sid={call_sid} raw_ai_reply={raw_reply!r}")
+
     parsed = _parse_ai_json(raw_reply)
     if parsed is None:
         # AI didn't return valid JSON — fall back to treating the raw text as the spoken reply,
         # and keep prior state unchanged rather than losing everything.
+        print(f"[PHONE DEBUG] call_sid={call_sid} FAILED TO PARSE JSON")
         spoken_reply = _strip_json_artifacts(raw_reply)
         ready_to_book = False
     else:
@@ -156,6 +159,7 @@ async def voice_respond(request: Request):
             if incoming:
                 call["state"][key] = incoming
         ready_to_book = bool(parsed.get("ready_to_book"))
+        print(f"[PHONE DEBUG] call_sid={call_sid} ready_to_book={ready_to_book} state={call['state']}")
 
     call["history"].append({"role": "assistant", "content": spoken_reply})
 
@@ -164,8 +168,10 @@ async def voice_respond(request: Request):
     if ready_to_book and not call["booked"]:
         missing = [f for f in REQUIRED_FOR_BOOKING if not call["state"].get(f)]
         if missing:
-            # Not actually complete — let the AI keep asking next turn instead of forcing a bad booking.
-            return _twiml(spoken_reply, call=call, allow_keypad=_wants_phone(spoken_reply))
+            print(f"[PHONE DEBUG] call_sid={call_sid} ready_to_book=True but MISSING FIELDS: {missing}")
+            # Let the caller know what's still needed instead of silently looping.
+            nudge = f" I just need your {missing[0].replace('_', ' ')} to finish booking — could you give me that?"
+            return _twiml(spoken_reply + nudge, call=call, allow_keypad=_wants_phone(spoken_reply))
         confirmation_line = _do_booking(call, caller_number)
         call["booked"] = True
         final_text = f"{spoken_reply} {confirmation_line}"
@@ -243,20 +249,26 @@ def _do_booking(call: dict, caller_number: str) -> str:
     base_reason = s.get("reason") or "General visit"
     reason = f"{base_reason} (Pet: {pet_name})" if pet_name else base_reason
 
+    print(f"[PHONE DEBUG] _do_booking called: store={store!r} date={date!r} time={time!r} phone={phone!r}")
+
     if not appt_svc.has_enough_notice(date, time):
+        print(f"[PHONE DEBUG] _do_booking REJECTED: not enough notice for date={date!r} time={time!r}")
         return "That time is a bit too soon for us to prepare — appointments need at least two hours notice. Please call back with a later time, or walk in directly!"
 
     if not appt_svc.is_available(store, date, time):
+        print(f"[PHONE DEBUG] _do_booking REJECTED: slot not available store={store!r} date={date!r} time={time!r}")
         return "It looks like that time slot just got taken. Please call back so we can find another time that works for you!"
 
     appt_id = appt_svc.book(store, date, time, {
         "name": name, "phone": phone, "email": "", "reason": reason,
     })
     store_phone = appt_svc.get_store_phone(store)
+    print(f"[PHONE DEBUG] booked appt_id={appt_id}, now sending SMS to {phone!r}")
 
-    send_appointment_confirmation_sms(
+    sms_result = send_appointment_confirmation_sms(
         name=name, appt_id=appt_id, store=store, date=date, time=time, to_number=phone,
     )
+    print(f"[PHONE DEBUG] SMS result: {sms_result!r}")
 
     store_html = f"""
     <h2>New Phone Appointment Booking</h2>
@@ -269,6 +281,7 @@ def _do_booking(call: dict, caller_number: str) -> str:
     <p><strong>Time:</strong> {time}</p>
     <p><strong>Reason:</strong> {reason}</p>
     """
-    send_email(STORE_EMAIL, f"Phone Booking Confirmed - {appt_id}", store_html)
+    email_result = send_email(STORE_EMAIL, f"Phone Booking Confirmed - {appt_id}", store_html)
+    print(f"[PHONE DEBUG] Email result: {email_result!r}")
 
     return f"Great news, your appointment is booked! Your confirmation number is {appt_id}, and you'll get a text message shortly."
