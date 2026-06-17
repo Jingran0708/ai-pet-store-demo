@@ -22,6 +22,7 @@ from services import session_service as sess
 from services import appointment_service as appt_svc
 from services.email_service import send as send_email, STORE_EMAIL
 from services.sms_service import send_appointment_confirmation_sms
+from data.loader import cat_breeds, dog_breeds
 from config import STORES
 
 router = APIRouter()
@@ -51,6 +52,26 @@ def _twiml(say_text: str, call_sid: str = "", gather: bool = True, hangup: bool 
 <Response>
     <Say voice="Polly.Joanna">{safe_text}</Say>
     {"<Hangup/>" if hangup else ""}
+</Response>"""
+    return Response(content=body, media_type="application/xml")
+
+
+def _twiml_phone_entry(say_text: str, call_sid: str = "") -> Response:
+    """
+    Special Gather for phone-number steps: accepts EITHER spoken digits OR keypad (DTMF) input,
+    since phone numbers are often easier and more reliable to type than to say aloud.
+    Keypad entry ends with '#'.
+    """
+    safe_text = say_text.replace("&", "and")
+    if call_sid:
+        LAST_PROMPT[call_sid] = safe_text
+    body = f"""<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+    <Gather input="speech dtmf" action="/voice/respond" method="POST" speechTimeout="3" timeout="10"
+            finishOnKey="#" actionOnEmptyResult="true" language="en-US">
+        <Say voice="Polly.Joanna">{safe_text} You can also type it on your keypad, followed by the pound key.</Say>
+    </Gather>
+    <Redirect method="POST">/voice/respond</Redirect>
 </Response>"""
     return Response(content=body, media_type="application/xml")
 
@@ -101,6 +122,7 @@ async def voice_respond(request: Request):
     call_sid = form.get("CallSid", "")
     caller_number = form.get("From", "")
     user_text = form.get("SpeechResult", "")
+    digits = form.get("Digits", "")
 
     session_id = CALL_SESSIONS.get(call_sid)
     if not session_id:
@@ -108,6 +130,12 @@ async def voice_respond(request: Request):
         state = sess.create_session("appointment")
         CALL_SESSIONS[call_sid] = state["session_id"]
         session_id = state["session_id"]
+
+    # Keypad entry of a phone number — treat this as the user's "spoken" text too,
+    # so the rest of the pipeline (extraction, AI context) sees it consistently.
+    if digits and not user_text:
+        user_text = digits
+        sess.update_session(session_id, {"collected.confirmed_phone": digits})
 
     if not user_text:
         last_question = LAST_PROMPT.get(call_sid, "Could you tell me how I can help you today?")
@@ -121,11 +149,12 @@ async def voice_respond(request: Request):
     # Capture name/pet/phone/email from this turn BEFORE building the prompt,
     # so the AI immediately knows what's already been collected.
     _extract_phone_fields(session_id, user_text)
+    _maybe_confirm_caller_number(session_id, call_sid, user_text, caller_number)
 
     today_str     = datetime.now().strftime("%A, %B %d, %Y")
     base_prompt   = build_prompt(today=today_str)
     state_context = sess.build_state_context(session_id)
-    known_summary = _build_known_summary(session_id)
+    known_summary = _build_known_summary(session_id, caller_number)
     full_prompt   = base_prompt + state_context + known_summary
 
     messages = [{"role": "user", "content": user_text}]
@@ -155,14 +184,29 @@ async def voice_respond(request: Request):
         final_store = parsed_store or confirmed.get("confirmed_store")
         final_date = parsed_date or confirmed.get("confirmed_date")
         final_time = parsed_time or confirmed.get("confirmed_time")
-        confirmation_line = _attempt_booking(session_id, final_store, final_date, final_time, caller_number)
+        final_phone = confirmed.get("confirmed_phone")
+        confirmation_line = _attempt_booking(session_id, final_store, final_date, final_time, caller_number, final_phone)
         final_text = f"{spoken_reply} {confirmation_line}"
         return _twiml(final_text, call_sid=call_sid, gather=False, hangup=True)
 
     if is_closing:
         return _twiml(spoken_reply, call_sid=call_sid, gather=False, hangup=True)
 
+    asking_for_phone = _is_asking_for_phone(spoken_reply, session_id)
+    if asking_for_phone:
+        return _twiml_phone_entry(spoken_reply, call_sid=call_sid)
+
     return _twiml(spoken_reply, call_sid=call_sid)
+
+
+def _is_asking_for_phone(spoken_reply: str, session_id: str) -> bool:
+    """True if this AI reply is asking the caller about a phone number for SMS confirmation."""
+    state = sess.get_session(session_id)
+    if state and state["collected"].get("confirmed_phone"):
+        return False  # already locked in, no need for keypad mode anymore
+    lower = spoken_reply.lower()
+    keywords = ["calling from", "phone number", "different number", "text the confirmation", "send the confirmation"]
+    return any(k in lower for k in keywords)
 
 
 def _parse_booking_tag(reply: str):
@@ -200,6 +244,13 @@ def _extract_phone_fields(session_id: str, user_text: str) -> None:
     if phone_match and not c.get("customer_phone"):
         sess.update_session(session_id, {"collected.customer_phone": phone_match.group(0)})
 
+    # Breed can be mentioned in a longer sentence too (e.g. "I'm looking for a Golden Retriever"),
+    # so check on every turn, not just short replies.
+    if not c.get("confirmed_breed"):
+        breed = _match_breed(text)
+        if breed:
+            sess.update_session(session_id, {"collected.confirmed_breed": breed})
+
     is_contact_info = bool(email_match or phone_match)
     word_count = len(text.split())
 
@@ -227,6 +278,53 @@ def _match_store(text: str) -> str:
         if short_name.lower() in text_lower:
             return s["name"]
     return ""
+
+
+def _match_breed(text: str) -> str:
+    """Find which known cat/dog breed is mentioned in a piece of text, if any."""
+    text_lower = text.lower()
+    all_breeds = list(cat_breeds().keys()) + list(dog_breeds().keys())
+    for breed in all_breeds:
+        if breed.lower() in text_lower:
+            return breed
+    return ""
+
+
+_AFFIRM_WORDS = ["yes", "yeah", "yep", "sure", "that's fine", "that works", "okay", "ok", "correct", "use this one", "use that"]
+_DENY_WORDS = ["no", "nope", "different number", "use another", "not that one"]
+
+
+def _maybe_confirm_caller_number(session_id: str, call_sid: str, user_text: str, caller_number: str) -> None:
+    """
+    If the AI's last question offered to use the caller's current number, interpret this reply
+    as agreement (lock in caller_number), disagreement (wait for them to give a new one), or
+    a directly-spoken new number (lock that in instead).
+    """
+    state = sess.get_session(session_id)
+    if not state:
+        return
+    c = state["collected"]
+    if c.get("confirmed_phone"):
+        return  # already locked in, nothing to do
+
+    last_question = LAST_PROMPT.get(call_sid, "").lower()
+    asked_about_number = "calling from" in last_question or "number you're calling" in last_question or "use a different number" in last_question
+    if not asked_about_number:
+        return
+
+    text_lower = user_text.strip().lower()
+
+    # A new number spoken directly takes priority over yes/no wording
+    phone_match = re.search(r"(\+?1?[\s.-]?)?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}", user_text)
+    if phone_match:
+        sess.update_session(session_id, {"collected.confirmed_phone": phone_match.group(0)})
+        return
+
+    if any(word in text_lower for word in _AFFIRM_WORDS) and caller_number:
+        sess.update_session(session_id, {"collected.confirmed_phone": caller_number})
+        return
+    # If they said no/different number without giving one yet, leave confirmed_phone unset
+    # so the AI naturally asks them to say the new number next.
 
 
 def _lock_in_confirmed_fields(session_id: str, spoken_reply: str, parsed_store: str, parsed_date: str, parsed_time: str) -> None:
@@ -257,7 +355,7 @@ def _lock_in_confirmed_fields(session_id: str, spoken_reply: str, parsed_store: 
         sess.update_session(session_id, {"collected.confirmed_time": parsed_time})
 
 
-def _build_known_summary(session_id: str) -> str:
+def _build_known_summary(session_id: str, caller_number: str = "") -> str:
     """Explicit reminder string for the AI of exactly what's already known, to stop re-asking."""
     state = sess.get_session(session_id)
     if not state:
@@ -268,6 +366,8 @@ def _build_known_summary(session_id: str) -> str:
         lines.append(f"- Caller's name: {c['customer_name']}")
     if c.get("pet_name"):
         lines.append(f"- Pet's name: {c['pet_name']}")
+    if c.get("confirmed_breed"):
+        lines.append(f"- Breed already discussed: {c['confirmed_breed']} (do not ask 'what breed are you looking for' again)")
     if c.get("confirmed_store"):
         lines.append(f"- CONFIRMED store: {c['confirmed_store']} (do not ask again)")
     if c.get("confirmed_date"):
@@ -276,14 +376,19 @@ def _build_known_summary(session_id: str) -> str:
         lines.append(f"- CONFIRMED time: {c['confirmed_time']} (do not ask again)")
     if c.get("customer_email"):
         lines.append(f"- Email: {c['customer_email']}")
-    if c.get("customer_phone"):
-        lines.append(f"- Phone: {c['customer_phone']}")
+    if c.get("confirmed_phone"):
+        lines.append(f"- CONFIRMED phone number for SMS: {c['confirmed_phone']} (do not ask again)")
+    elif caller_number:
+        lines.append(
+            f"- Caller's number (the number they're calling from right now): {caller_number} "
+            "(you may offer to use this for the SMS confirmation)"
+        )
     if len(lines) == 1:
         return ""
     return "\n".join(lines)
 
 
-def _attempt_booking(session_id: str, store: str, date: str, time: str, caller_number: str) -> str:
+def _attempt_booking(session_id: str, store: str, date: str, time: str, caller_number: str, confirmed_phone: str = None) -> str:
     """
     Book the appointment, text the customer, and email the store.
     Returns a spoken confirmation line for the call.
@@ -295,7 +400,7 @@ def _attempt_booking(session_id: str, store: str, date: str, time: str, caller_n
     c = state["collected"]
     name     = c.get("customer_name") or "Guest"
     pet_name = c.get("pet_name") or ""
-    phone    = c.get("customer_phone") or caller_number or ""
+    phone    = confirmed_phone or c.get("confirmed_phone") or c.get("customer_phone") or caller_number or ""
     store    = store or c.get("confirmed_store") or (STORES[0]["name"] if STORES else "Happy Paws")
     base_reason = c.get("visit_reason") or "General visit"
     reason = f"{base_reason} (Pet: {pet_name})" if pet_name else base_reason
