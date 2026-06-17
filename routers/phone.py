@@ -1,24 +1,27 @@
 """
 routers/phone.py
-Handles incoming Twilio phone calls and runs a voice version of the
-appointment booking conversation, reusing the existing AI + session logic.
+Handles incoming Twilio phone calls and runs the AI Phone Agent conversation
+(see agents/phone_agent.py for the full flow spec: opening, buy-pet,
+product inquiry, aftersale, shared appointment sub-flow, closing).
 
 Twilio webhook flow:
 1. POST /voice/incoming   <- Twilio calls this when someone dials the number
 2. We reply with TwiML: <Say> (AI's question) + <Gather input="speech"> (listen)
 3. POST /voice/respond    <- Twilio posts back what the caller said (as text)
-4. We run it through the same ai_chat() used by the website, using flow="appointment"
-5. Repeat until booking info is complete, then call appt_svc.book() + send email
-6. <Say> a closing line and <Hangup/>
+4. We run it through ai_chat() using the dedicated phone agent prompt
+5. When the AI signals a confirmed booking, we book it, text the customer,
+   and email the store — then close the call.
 """
 from fastapi import APIRouter, Request, Response
 from datetime import datetime
 import re
-from agents import get_prompt
+
+from agents.phone_agent import build_prompt
 from services.ai_service import chat as ai_chat
 from services import session_service as sess
 from services import appointment_service as appt_svc
-from services.email_service import send_appointment_confirmation
+from services.email_service import send as send_email, STORE_EMAIL
+from services.sms_service import send_appointment_confirmation_sms
 from config import STORES
 
 router = APIRouter()
@@ -26,40 +29,22 @@ router = APIRouter()
 # Map Twilio's CallSid -> our internal session_id, so each call keeps its own state
 CALL_SESSIONS: dict = {}
 
-PHONE_INSTRUCTIONS = (
-    "\n\nYou are currently speaking on a PHONE CALL, not a text chat. Today's date is {today}. "
-    "Keep every response to 1-2 short spoken sentences — no lists, no markdown, no action tags shown out loud. "
-    "Speak warmly and naturally, like a kind human receptionist, not a script. "
-    "You MUST collect, one at a time: the caller's name, their pet's name, "
-    "whether they want to book an appointment, which store (read out store names if asked), "
-    "a preferred date and time, the reason for the visit (including how the pet is feeling/doing, ask gently), "
-    "and a phone number or email to confirm the booking. "
-    "When the caller gives a date/time (e.g. 'tomorrow afternoon', 'next Tuesday at 2'), convert it to an exact "
-    "calendar date and a half-hour time slot between 11 AM and 8 PM, then repeat it back clearly to confirm, "
-    "e.g. 'Just to confirm, that's Tuesday June 23rd at 2:00 PM — does that work?'. "
-    "Only proceed once the caller confirms the date and time out loud. "
-    "Acknowledge what the caller just said before asking the next question (e.g. 'I'm sorry to hear Mochi hasn't been eating well.'). "
-    "Once you have name, pet name, store, a CONFIRMED date, a CONFIRMED time, reason, and a phone or email, "
-    "end your reply with exactly this tag on its own: "
-    "[ACTION:PHONE_BOOK_READY date=YYYY-MM-DD time=HH:MM AM/PM] "
-    "using the real confirmed values, e.g. [ACTION:PHONE_BOOK_READY date=2026-06-23 time=02:00 PM]"
-)
-
 
 def _twiml(say_text: str, gather: bool = True, hangup: bool = False) -> Response:
     """Build a TwiML response. gather=True listens for speech next."""
+    safe_text = say_text.replace("&", "and")
     if gather:
         body = f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
     <Gather input="speech" action="/voice/respond" method="POST" speechTimeout="auto" language="en-US">
-        <Say voice="Polly.Joanna">{say_text}</Say>
+        <Say voice="Polly.Joanna">{safe_text}</Say>
     </Gather>
     <Say voice="Polly.Joanna">Sorry, I didn't catch that. Goodbye for now!</Say>
 </Response>"""
     else:
         body = f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-    <Say voice="Polly.Joanna">{say_text}</Say>
+    <Say voice="Polly.Joanna">{safe_text}</Say>
     {"<Hangup/>" if hangup else ""}
 </Response>"""
     return Response(content=body, media_type="application/xml")
@@ -75,8 +60,8 @@ async def voice_incoming(request: Request):
     CALL_SESSIONS[call_sid] = state["session_id"]
 
     greeting = (
-        "Hi there, thanks for calling Happy Paws Pet Store! "
-        "I'd be happy to help you book an appointment. Can I start with your name?"
+        "Hi there, thanks for calling Happy Paws Pets! "
+        "Can I start with your name?"
     )
     return _twiml(greeting)
 
@@ -86,6 +71,7 @@ async def voice_respond(request: Request):
     """Called every time Twilio finishes transcribing what the caller said."""
     form = await request.form()
     call_sid = form.get("CallSid", "")
+    caller_number = form.get("From", "")
     user_text = form.get("SpeechResult", "")
 
     session_id = CALL_SESSIONS.get(call_sid)
@@ -98,10 +84,15 @@ async def voice_respond(request: Request):
     if not user_text:
         return _twiml("Sorry, I didn't catch that — could you say that again?")
 
-    base_prompt   = get_prompt("appointment")
-    state_context = sess.build_state_context(session_id)
+    # Capture name/pet/phone/email from this turn BEFORE building the prompt,
+    # so the AI immediately knows what's already been collected.
+    _extract_phone_fields(session_id, user_text)
+
     today_str     = datetime.now().strftime("%A, %B %d, %Y")
-    full_prompt   = base_prompt + state_context + PHONE_INSTRUCTIONS.format(today=today_str)
+    base_prompt   = build_prompt(today=today_str)
+    state_context = sess.build_state_context(session_id)
+    known_summary = _build_known_summary(session_id)
+    full_prompt   = base_prompt + state_context + known_summary
 
     messages = [{"role": "user", "content": user_text}]
 
@@ -115,17 +106,19 @@ async def voice_respond(request: Request):
 
     sess.extract_state_from_reply(session_id, user_text, reply)
 
-    # Try to capture name/pet/phone/email from this turn too (lightweight phone-specific parsing)
-    _extract_phone_fields(session_id, user_text)
-
     booking_ready = "[ACTION:PHONE_BOOK_READY" in reply
     parsed_date, parsed_time = _parse_booking_tag(reply)
     spoken_reply = re.sub(r"\[ACTION:PHONE_BOOK_READY.*?\]", "", reply).strip()
 
+    is_closing = "goodbye" in spoken_reply.lower() and not booking_ready
+
     if booking_ready:
-        confirmation_line = _attempt_booking(session_id, parsed_date, parsed_time)
+        confirmation_line = _attempt_booking(session_id, parsed_date, parsed_time, caller_number)
         final_text = f"{spoken_reply} {confirmation_line}"
         return _twiml(final_text, gather=False, hangup=True)
+
+    if is_closing:
+        return _twiml(spoken_reply, gather=False, hangup=True)
 
     return _twiml(spoken_reply)
 
@@ -135,49 +128,91 @@ def _parse_booking_tag(reply: str):
     date_match = re.search(r"date=(\d{4}-\d{2}-\d{2})", reply)
     time_match = re.search(r"time=(\d{2}:\d{2}\s?[APap][Mm])", reply)
     date = date_match.group(1) if date_match else None
-    time = time_match.group(1).upper().replace("AM", " AM").replace("PM", " PM").replace("  ", " ").strip() if time_match else None
+    if time_match:
+        raw = time_match.group(1).upper().replace("AM", " AM").replace("PM", " PM")
+        time = re.sub(r"\s+", " ", raw).strip()
+    else:
+        time = None
     return date, time
 
 
 def _extract_phone_fields(session_id: str, user_text: str) -> None:
-    """Very light extraction for phone/email mentioned by voice (best-effort)."""
+    """
+    Best-effort extraction for phone-specific fields from free-form speech.
+    Order-aware: name is asked first, so the first short reply is treated as the name;
+    once name is known, the next short reply (if not contact info) is treated as pet name.
+    """
     state = sess.get_session(session_id)
     if not state:
         return
     c = state["collected"]
+    text = user_text.strip()
 
-    if not c.get("customer_email"):
-        email_match = re.search(r"[\w\.-]+@[\w\.-]+\.\w+", user_text)
-        if email_match:
-            sess.update_session(session_id, {"collected.customer_email": email_match.group(0)})
+    email_match = re.search(r"[\w\.-]+@[\w\.-]+\.\w+", text)
+    if email_match and not c.get("customer_email"):
+        sess.update_session(session_id, {"collected.customer_email": email_match.group(0)})
 
-    if not c.get("customer_phone"):
-        phone_match = re.search(r"(\+?1?[\s.-]?)?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}", user_text)
-        if phone_match:
-            sess.update_session(session_id, {"collected.customer_phone": phone_match.group(0)})
+    phone_match = re.search(r"(\+?1?[\s.-]?)?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}", text)
+    if phone_match and not c.get("customer_phone"):
+        sess.update_session(session_id, {"collected.customer_phone": phone_match.group(0)})
 
-    if not c.get("customer_name") and len(user_text.split()) <= 4 and state["turn_count"] <= 1:
-        sess.update_session(session_id, {"collected.customer_name": user_text.strip().title()})
+    is_contact_info = bool(email_match or phone_match)
+    word_count = len(text.split())
+
+    # Treat short, non-contact-info replies as name or pet name, in order.
+    if not is_contact_info and word_count <= 6:
+        cleaned = re.sub(
+            r"\b(my name is|i'?m|it'?s|this is|call me|i am)\b", "", text, flags=re.IGNORECASE
+        ).strip(" .,!?").title()
+        if cleaned:
+            if not c.get("customer_name"):
+                sess.update_session(session_id, {"collected.customer_name": cleaned})
+            elif not c.get("pet_name"):
+                sess.update_session(session_id, {"collected.pet_name": cleaned})
 
 
-def _attempt_booking(session_id: str, date: str, time: str) -> str:
-    """Book the appointment using collected info + confirmed date/time; return a spoken confirmation line."""
+def _build_known_summary(session_id: str) -> str:
+    """Explicit reminder string for the AI of exactly what's already known, to stop re-asking."""
+    state = sess.get_session(session_id)
+    if not state:
+        return ""
+    c = state["collected"]
+    lines = ["\n\nALREADY COLLECTED ON THIS CALL (do NOT ask for these again):"]
+    if c.get("customer_name"):
+        lines.append(f"- Caller's name: {c['customer_name']}")
+    if c.get("pet_name"):
+        lines.append(f"- Pet's name: {c['pet_name']}")
+    if c.get("customer_email"):
+        lines.append(f"- Email: {c['customer_email']}")
+    if c.get("customer_phone"):
+        lines.append(f"- Phone: {c['customer_phone']}")
+    if len(lines) == 1:
+        return ""
+    return "\n".join(lines)
+
+
+def _attempt_booking(session_id: str, date: str, time: str, caller_number: str) -> str:
+    """
+    Book the appointment, text the customer, and email the store.
+    Returns a spoken confirmation line for the call.
+    """
     state = sess.get_session(session_id)
     if not state:
         return "Something went wrong on our end, please call back to confirm your appointment."
 
     c = state["collected"]
-    name  = c.get("customer_name") or "Guest"
-    email = c.get("customer_email") or ""
-    phone = c.get("customer_phone") or ""
-    store = STORES[0]["name"] if STORES else "Happy Paws"
-    reason = c.get("visit_reason") or "General visit"
+    name     = c.get("customer_name") or "Guest"
+    pet_name = c.get("pet_name") or ""
+    phone    = c.get("customer_phone") or caller_number or ""
+    store    = STORES[0]["name"] if STORES else "Happy Paws"
+    base_reason = c.get("visit_reason") or "General visit"
+    reason = f"{base_reason} (Pet: {pet_name})" if pet_name else base_reason
 
     if not date or not time:
         return "I've noted everything down, but I couldn't quite lock in the time — our team will call you back shortly to confirm. Thanks for calling!"
 
-    if not (email or phone):
-        return "I've got your appointment details ready, but I'll need a phone number or email to send your confirmation — could you give me that before we hang up?"
+    if not phone:
+        return "I've got your appointment details ready, but I'll need a phone number to send your confirmation — could you give me that before we hang up?"
 
     if not appt_svc.has_enough_notice(date, time):
         return "That time is a bit too soon for us to prepare — appointments need at least two hours notice. Please call back with a later time, or walk in directly!"
@@ -186,15 +221,27 @@ def _attempt_booking(session_id: str, date: str, time: str) -> str:
         return "It looks like that time slot just got taken. Please call back so we can find another time that works for you!"
 
     appt_id = appt_svc.book(store, date, time, {
-        "name": name, "phone": phone, "email": email, "reason": reason,
+        "name": name, "phone": phone, "email": "", "reason": reason,
     })
     store_phone = appt_svc.get_store_phone(store)
 
-    if email:
-        send_appointment_confirmation(
-            name=name, email=email, phone=phone,
-            appt_id=appt_id, store=store, store_phone=store_phone,
-            date=date, time=time, reason=reason,
-        )
+    # SMS to the customer
+    send_appointment_confirmation_sms(
+        name=name, appt_id=appt_id, store=store, date=date, time=time, to_number=phone,
+    )
 
-    return f"Great news, your appointment is booked! Your confirmation number is {appt_id}. Thanks for calling Happy Paws!"
+    # Email to the store (not the customer) — per spec, phone bookings notify the store by email
+    store_html = f"""
+    <h2>New Phone Appointment Booking</h2>
+    <p><strong>Confirmation #:</strong> {appt_id}</p>
+    <p><strong>Customer:</strong> {name}</p>
+    <p><strong>Pet:</strong> {pet_name or 'N/A'}</p>
+    <p><strong>Phone:</strong> {phone}</p>
+    <p><strong>Store:</strong> {store} ({store_phone})</p>
+    <p><strong>Date:</strong> {date}</p>
+    <p><strong>Time:</strong> {time}</p>
+    <p><strong>Reason:</strong> {reason}</p>
+    """
+    send_email(STORE_EMAIL, f"Phone Booking Confirmed - {appt_id}", store_html)
+
+    return f"Great news, your appointment is booked! Your confirmation number is {appt_id}, and you'll get a text message shortly. Thanks for calling Happy Paws!"
