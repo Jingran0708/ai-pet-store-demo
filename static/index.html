@@ -20,6 +20,11 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(
 .choice-card .icon{font-size:28px;color:var(--purple);flex-shrink:0;margin-top:2px;}
 .choice-card .label{font-size:15px;font-weight:600;margin-bottom:4px;}
 .choice-card .sub{font-size:12px;color:var(--muted);line-height:1.5;}
+.phone-contact{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:1.25rem 1.5rem;margin-top:14px;display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;}
+.phone-contact-label{font-size:13px;font-weight:600;color:var(--muted);display:flex;align-items:center;gap:6px;margin-bottom:4px;}
+.phone-contact-number{font-size:20px;font-weight:700;color:var(--text);}
+.call-now-btn{background:var(--purple);color:white;border:none;border-radius:10px;padding:11px 22px;font-size:14px;font-weight:600;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:7px;white-space:nowrap;}
+.call-now-btn:hover{background:var(--purple-dark);}
 #agent-view{display:none;max-width:640px;margin:0 auto;padding:1rem 1.5rem 2rem;}
 .top-bar{display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;}
 .back-btn{background:none;border:none;font-size:14px;color:var(--muted);cursor:pointer;display:flex;align-items:center;gap:5px;}
@@ -155,6 +160,13 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(
       <div class="icon"><i class="ti ti-calendar"></i></div>
       <div><div class="label">Appointments &amp; Support</div><div class="sub">Book a visit, ask about products, or get after-sales help — all in one chat.</div></div>
     </div>
+  </div>
+  <div class="phone-contact">
+    <div class="phone-contact-text">
+      <div class="phone-contact-label"><i class="ti ti-phone"></i> Contact Us by Phone</div>
+      <div class="phone-contact-number" id="store-phone-number">+1 (647) 794-3974</div>
+    </div>
+    <a class="call-now-btn" id="call-now-btn" href="tel:+16477943974"><i class="ti ti-phone-call"></i> Call Now</a>
   </div>
 </div>
 
@@ -314,7 +326,7 @@ function runVoiceDiag(){
   lines.push('<b>Current State</b>');
   lines.push((voiceModeActive?ok:warn)('Voice mode: '+(voiceModeActive?'ON':'OFF')));
   lines.push((isSpeaking?warn:ok)('Speaking: '+(isSpeaking?'YES (may block mic)':'NO')));
-  lines.push('<button onclick="document.getElementById(\'voice-diag\').style.display=\'none\' style="margin-top:6px;padding:3px 10px;border-radius:5px;border:1px solid #555;background:#333;color:#eee;cursor:pointer;font-size:11px">Close</button>');
+  lines.push('<button onclick="document.getElementById(\'voice-diag\').style.display=\'none\'" style="margin-top:6px;padding:3px 10px;border-radius:5px;border:1px solid #555;background:#333;color:#eee;cursor:pointer;font-size:11px">Close</button>');
   panel.innerHTML=lines.join('<br>');
 }
 
