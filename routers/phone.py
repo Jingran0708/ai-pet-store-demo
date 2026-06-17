@@ -144,10 +144,28 @@ async def voice_respond(request: Request):
     print(f"[PHONE DEBUG] call_sid={call_sid} raw_ai_reply={raw_reply!r}")
 
     parsed = _parse_ai_json(raw_reply)
+
     if parsed is None:
-        # AI didn't return valid JSON — fall back to treating the raw text as the spoken reply,
-        # and keep prior state unchanged rather than losing everything.
-        print(f"[PHONE DEBUG] call_sid={call_sid} FAILED TO PARSE JSON")
+        # AI broke format. Retry once with an explicit correction instruction instead of
+        # silently falling back to plain text (which is what was causing bookings to never fire).
+        print(f"[PHONE DEBUG] call_sid={call_sid} FAILED TO PARSE JSON — retrying with correction")
+        retry_prompt = full_prompt + (
+            "\n\nYOUR PREVIOUS RESPONSE WAS REJECTED because it was not valid JSON. "
+            f"Your previous response was: {raw_reply!r}. "
+            "Take the same meaning/content as that response, but output it as ONLY the required JSON object "
+            "format described above. No exceptions."
+        )
+        try:
+            raw_reply_retry = await ai_chat(retry_prompt, call["history"])
+            print(f"[PHONE DEBUG] call_sid={call_sid} retry_raw_ai_reply={raw_reply_retry!r}")
+            parsed = _parse_ai_json(raw_reply_retry)
+        except RuntimeError:
+            parsed = None
+
+    if parsed is None:
+        # Still failed after retry — fall back to plain text so the call doesn't break,
+        # but state/ready_to_book are NOT trusted this turn.
+        print(f"[PHONE DEBUG] call_sid={call_sid} STILL FAILED TO PARSE JSON after retry")
         spoken_reply = _strip_json_artifacts(raw_reply)
         ready_to_book = False
     else:
@@ -201,6 +219,12 @@ def _build_context_note(state: dict, caller_number: str, already_booked: bool) -
             "\nNOTE: an appointment was already booked earlier in this call. If the caller wants something "
             "else now, help them, and only set ready_to_book true again if they want a NEW appointment."
         )
+    lines.append(
+        "\n\nREMINDER — YOUR ENTIRE RESPONSE MUST BE ONE JSON OBJECT, NOTHING ELSE. "
+        'Format: {"reply": "...", "state": {"name": ..., "pet_name": ..., "intent": ..., "breed": ..., '
+        '"store": ..., "date": ..., "time": ..., "reason": ..., "phone": ...}, "ready_to_book": true/false}. '
+        "Do not write plain conversational text outside the JSON. Do not use markdown code fences."
+    )
     return "\n".join(lines)
 
 
